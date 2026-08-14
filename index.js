@@ -159,7 +159,25 @@ export function apply(ctx) {
       if (Array.isArray(raw.removed)) for (const key of raw.removed) removed.add(String(key))
       if (CURRENCIES.includes(raw.targetCurrency)) targetCurrency = raw.targetCurrency
       if (typeof raw.balanceBaseUrl === 'string') balanceBaseUrl = raw.balanceBaseUrl
-      if (raw.balance && typeof raw.balance === 'object' && raw.balance.status) balance = raw.balance
+      if (raw.balance && typeof raw.balance === 'object' && raw.balance.status) {
+        const stored = raw.balance
+        const total = Number(stored.total)
+        balance = {
+          status: ['ok', 'error', 'loading'].includes(stored.status) ? stored.status : 'none',
+          total: Number.isFinite(total) ? total : null,
+          currency: typeof stored.currency === 'string' ? stored.currency : null,
+          infos: Array.isArray(stored.infos)
+            ? stored.infos.filter((info) => info && typeof info === 'object').map((info) => ({
+                currency: String(info.currency || 'CNY'),
+                total: Number(info.total) || 0,
+                granted: Number(info.granted) || 0,
+                toppedUp: Number(info.toppedUp) || 0,
+              }))
+            : [],
+          updatedAt: typeof stored.updatedAt === 'string' ? stored.updatedAt : null,
+          message: typeof stored.message === 'string' ? stored.message : null,
+        }
+      }
     } catch {
       // 文件损坏时从空状态开始，下次写入会覆盖。
     }
@@ -205,6 +223,9 @@ export function apply(ctx) {
   }
 
   function schedulePersist() {
+    // dispose 之后不再武装写盘定时器（in-flight 的 llm/stream 可能在
+    // dispose 之后才结束，避免产生永不被清理的周期 flush）。
+    if (disposed) return
     dirty = true
     if (writeTimer !== null) return
     writeTimer = setInterval(() => {
