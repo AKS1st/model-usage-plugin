@@ -18,7 +18,7 @@ DeepSeek Harness（DSH）Web 插件：统计各模型 tokens 消耗并估算费�
 dsh plugin --profile web add file:/path/to/model-usage-plugin
 ```
 
-通过 `dsh plugin`（pnpm 转发）安装到 profile，并自动登记为 bundle 层。更新代码后重跑同一条命令即可升级。卸载：
+通过 `dsh plugin`（pnpm 转发）安装到 profile，并自动登记为 bundle 层。卸载：
 
 ```bash
 dsh plugin --profile web remove musage-stats
