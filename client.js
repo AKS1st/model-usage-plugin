@@ -91,6 +91,73 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
           }
           const fmtRate = (n) => (Number.isFinite(n) ? n.toFixed(4) : '-')
 
+          // 与 index.js 的 PRESET_PRICES 保持一致：重置按钮在客户端直接按
+          // 预设价写回（走既有 set-price 动作），避免新增宿主动作需重启。
+          const PRESET_PRICES = {
+            // DeepSeek（国产，CNY 元 / 百万 tokens）
+            'deepseek-v4-flash': { currency: 'CNY', input: 1.0, output: 2.0, cacheRead: 0.02, cacheWrite: 0 },
+            'deepseek-v4-flash-0731': { currency: 'CNY', input: 1.0, output: 2.0, cacheRead: 0.02, cacheWrite: 0 },
+            'deepseek-v4-pro': { currency: 'CNY', input: 3.11, output: 6.22, cacheRead: 0.026, cacheWrite: 0 },
+            'deepseek-v4-pro-0813': { currency: 'CNY', input: 3.11, output: 6.22, cacheRead: 0.026, cacheWrite: 0 },
+            'deepseek-chat': { currency: 'CNY', input: 1.79, output: 6.79, cacheRead: 0.93, cacheWrite: 0 },
+            'deepseek-reasoner': { currency: 'CNY', input: 3.93, output: 15.66, cacheRead: 1.0, cacheWrite: 0 },
+            // OpenAI（海外，USD / 百万 tokens）
+            'gpt-5.6-luna': { currency: 'USD', input: 0.1, output: 0.6, cacheRead: 0.01, cacheWrite: 0.125 },
+            'gpt-5.6-terra': { currency: 'USD', input: 1, output: 6, cacheRead: 0.1, cacheWrite: 1.25 },
+            'gpt-5.6-sol': { currency: 'USD', input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
+            'gpt-5.5': { currency: 'USD', input: 5, output: 30, cacheRead: 0.5, cacheWrite: 0 },
+            'gpt-5.4': { currency: 'USD', input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 0 },
+            'gpt-5.4-mini': { currency: 'USD', input: 0.75, output: 4.5, cacheRead: 0.075, cacheWrite: 0 },
+            'gpt-5.4-nano': { currency: 'USD', input: 0.2, output: 1.25, cacheRead: 0.02, cacheWrite: 0 },
+            'gpt-5.3': { currency: 'USD', input: 1.75, output: 14, cacheRead: 0.175, cacheWrite: 0 },
+            'gpt-5.2': { currency: 'USD', input: 1.75, output: 14, cacheRead: 0.175, cacheWrite: 0 },
+            'gpt-5.1': { currency: 'USD', input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+            'gpt-5': { currency: 'USD', input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+            'gpt-5-mini': { currency: 'USD', input: 0.25, output: 2, cacheRead: 0.025, cacheWrite: 0 },
+            'gpt-5-nano': { currency: 'USD', input: 0.05, output: 0.4, cacheRead: 0.005, cacheWrite: 0 },
+            'gpt-4.1': { currency: 'USD', input: 2, output: 8, cacheRead: 0.5, cacheWrite: 0 },
+            'gpt-4.1-mini': { currency: 'USD', input: 0.4, output: 1.6, cacheRead: 0.1, cacheWrite: 0 },
+            'gpt-4.1-nano': { currency: 'USD', input: 0.1, output: 0.4, cacheRead: 0.025, cacheWrite: 0 },
+            'gpt-4o': { currency: 'USD', input: 2.5, output: 10, cacheRead: 1.25, cacheWrite: 0 },
+            'gpt-4o-mini': { currency: 'USD', input: 0.15, output: 0.6, cacheRead: 0.075, cacheWrite: 0 },
+            'o3': { currency: 'USD', input: 2, output: 8, cacheRead: 0.5, cacheWrite: 0 },
+            'o3-mini': { currency: 'USD', input: 1.1, output: 4.4, cacheRead: 0.55, cacheWrite: 0 },
+            'o4-mini': { currency: 'USD', input: 1.1, output: 4.4, cacheRead: 0.275, cacheWrite: 0 },
+            // Anthropic（海外，USD）
+            'claude-opus-4.8': { currency: 'USD', input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+            'claude-opus-4.7': { currency: 'USD', input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+            'claude-opus-4.5': { currency: 'USD', input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+            'claude-opus-4': { currency: 'USD', input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
+            'claude-sonnet-4.6': { currency: 'USD', input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+            'claude-sonnet-4.5': { currency: 'USD', input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+            'claude-sonnet-4': { currency: 'USD', input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+            'claude-haiku-4.5': { currency: 'USD', input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
+            // Google Gemini（海外，USD）
+            'gemini-3-pro-preview': { currency: 'USD', input: 2, output: 12, cacheRead: 0.2, cacheWrite: 0.375 },
+            'gemini-3-flash': { currency: 'USD', input: 0.5, output: 3, cacheRead: 0.05, cacheWrite: 0.0833 },
+            'gemini-2.5-pro': { currency: 'USD', input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0.375 },
+            'gemini-2.5-flash': { currency: 'USD', input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0.0833 },
+            'gemini-2.5-flash-lite': { currency: 'USD', input: 0.1, output: 0.4, cacheRead: 0.01, cacheWrite: 0.0833 },
+            // 通义千问 Qwen（国产，CNY）
+            'qwen3-max': { currency: 'CNY', input: 5.58, output: 27.89, cacheRead: 1.12, cacheWrite: 6.97 },
+            'qwen3-max-thinking': { currency: 'CNY', input: 5.58, output: 27.89, cacheRead: 1.12, cacheWrite: 6.97 },
+            'qwen-plus': { currency: 'CNY', input: 1.86, output: 5.58, cacheRead: 0.37, cacheWrite: 2.32 },
+            // 月之暗面 Kimi（国产，CNY）
+            'kimi-k2': { currency: 'CNY', input: 4.08, output: 16.45, cacheRead: 0.68, cacheWrite: 0 },
+            'kimi-k2-thinking': { currency: 'CNY', input: 4.29, output: 17.88, cacheRead: 1.07, cacheWrite: 0 },
+            'kimi-k2.7': { currency: 'CNY', input: 5.08, output: 25.03, cacheRead: 1.07, cacheWrite: 0 },
+            // 智谱 GLM（国产，CNY）
+            'glm-4.6': { currency: 'CNY', input: 3.58, output: 14.3, cacheRead: 0.72, cacheWrite: 0 },
+            'glm-4.5': { currency: 'CNY', input: 4.29, output: 15.73, cacheRead: 0.79, cacheWrite: 0 },
+            'glm-4.5-air': { currency: 'CNY', input: 0.93, output: 6.08, cacheRead: 0.18, cacheWrite: 0 },
+          }
+          const presetFor = (model) => {
+            const current = String(model || '')
+            if (PRESET_PRICES[current]) return PRESET_PRICES[current]
+            const key = current.replace(/:batch$/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '').replace(/^[a-z0-9-]+\//, '')
+            return PRESET_PRICES[key] || undefined
+          }
+
           function ModelUsagePage() {
             const [view, setView] = React.useState(null)
             const [drafts, setDrafts] = React.useState({})
@@ -160,6 +227,14 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                 return { ...prev, [model]: { ...base, [field]: value } }
               })
             }
+            const clearDraft = (model) => {
+              setDrafts((prev) => {
+                if (!(model in prev)) return prev
+                const next = { ...prev }
+                delete next[model]
+                return next
+              })
+            }
             const togglePrice = (model) => setOpen((prev) => ({ ...prev, [model]: !prev[model] }))
             const savePrice = (model) => {
               const d = draftOf(model)
@@ -170,7 +245,14 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             }
             const removePrice = (model) => {
               postAction({ action: 'remove-price', model })
-                .then(refresh)
+                .then(() => { clearDraft(model); refresh() })
+                .catch((err) => setError((err && err.message) || String(err)))
+            }
+            const resetPrice = (model) => {
+              const preset = presetFor(model)
+              if (!preset) return
+              postAction({ action: 'set-price', model, price: preset })
+                .then(() => { clearDraft(model); refresh() })
                 .catch((err) => setError((err && err.message) || String(err)))
             }
             const setTarget = (currency) => {
@@ -306,6 +388,7 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                         field(model, 'cacheWrite', '缓存写入', d.cacheWrite)),
                       React.createElement('div', { className: 'mu-price-actions' },
                         React.createElement('button', { className: 'mu-btn', disabled: saving === model, onClick: () => savePrice(model) }, saving === model ? '保存中…' : '保存'),
+                        React.createElement('button', { className: 'mu-btn', disabled: !presetFor(model), onClick: () => resetPrice(model) }, '重置'),
                         React.createElement('button', { className: 'mu-btn', disabled: !hasPrice, onClick: () => removePrice(model) }, '移除'),
                         React.createElement('span', { className: 'mu-hint' }, '单价单位：' + (d.currency || 'USD') + ' / 百万 tokens · 展示按目标货币换算')))
                   : React.createElement('button', { className: 'mu-price-toggle', onClick: () => togglePrice(model) }, (hasPrice ? '调整价格' : '配置价格') + ' ▾'))
