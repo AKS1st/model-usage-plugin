@@ -2,6 +2,8 @@
 
 DeepSeek Harness（DSH）Web 插件：统计各模型 tokens 消耗并估算费用，显示 API 账户余额。
 
+![设置面板"模型消耗"页签效果](image.png)
+
 ## 功能
 
 - 按模型统计 tokens（区分缓存命中 / 未命中 / 写入）、调用与失败次数，估算费用
