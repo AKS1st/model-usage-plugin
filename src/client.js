@@ -62,6 +62,11 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             .mu-input { width: 100%; box-sizing: border-box; padding: 4px 6px; font-size: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
             .mu-input:focus { outline: none; border-color: var(--dsw-alias-brand-primary); }
             .mu-price-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+            .mu-peak { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l1); }
+            .mu-peak-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dsw-alias-label-primary); cursor: pointer; }
+            .mu-peak-body { margin-top: 8px; }
+            .mu-peak-time { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+            .mu-peak-stats { margin-top: 6px; font-size: 11px; color: var(--dsw-alias-state-warn-primary); }
             .mu-hint { font-size: 11px; color: var(--dsw-alias-label-secondary); font-weight: 400; }
             .mu-error { color: var(--dsw-alias-state-error-primary); margin-bottom: 10px; }
             .mu-empty { color: var(--dsw-alias-label-secondary); padding: 14px 0; text-align: center; }
@@ -225,7 +230,9 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             }
             const priceOf = (model) => {
               const p = priceMap[model]
-              return p ? { currency: p.currency || 'USD', input: p.input, output: p.output, cacheRead: p.cacheRead, cacheWrite: p.cacheWrite } : { currency: 'USD', input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+              return p
+                ? { currency: p.currency || 'USD', input: p.input, output: p.output, cacheRead: p.cacheRead, cacheWrite: p.cacheWrite, peak: p.peak || null }
+                : { currency: 'USD', input: 0, output: 0, cacheRead: 0, cacheWrite: 0, peak: null }
             }
             const rowOf = (model) => rows.find((r) => r.model === model)
             const costOf = (model) => {
@@ -233,18 +240,40 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
               if (!row) return null
               const p = priceOf(model)
               if (!(p.input > 0 || p.output > 0 || p.cacheRead > 0 || p.cacheWrite > 0)) return null
-              const own = (row.inputTokens * p.input + row.cacheReadTokens * p.cacheRead + row.cacheWriteTokens * p.cacheWrite + row.outputTokens * p.output) / 1e6
+              const peak = p.peak && p.peak.enabled ? p.peak : null
+              // 高峰价留空/为 0 时按正常价计算；非高峰一律按正常价。
+              const peakPrice = (normal, peakVal) => (peak && peakVal > 0 ? peakVal : normal)
+              const own = (
+                (row.inputTokens - row.peakInputTokens) * p.input + row.peakInputTokens * peakPrice(p.input, peak && peak.input)
+                + (row.cacheReadTokens - row.peakCacheReadTokens) * p.cacheRead + row.peakCacheReadTokens * peakPrice(p.cacheRead, peak && peak.cacheRead)
+                + (row.cacheWriteTokens - row.peakCacheWriteTokens) * p.cacheWrite + row.peakCacheWriteTokens * peakPrice(p.cacheWrite, peak && peak.cacheWrite)
+                + (row.outputTokens - row.peakOutputTokens) * p.output + row.peakOutputTokens * peakPrice(p.output, peak && peak.output)
+              ) / 1e6
               return (own / rateOf(p.currency)) * rateOf(target)
             }
             const draftOf = (model) => {
               const d = drafts[model]
               if (d) return d
               const p = priceOf(model)
-              return { currency: p.currency, input: String(p.input || ''), output: String(p.output || ''), cacheRead: String(p.cacheRead || ''), cacheWrite: String(p.cacheWrite || '') }
+              const peak = p.peak || {}
+              return {
+                currency: p.currency,
+                input: String(p.input || ''),
+                output: String(p.output || ''),
+                cacheRead: String(p.cacheRead || ''),
+                cacheWrite: String(p.cacheWrite || ''),
+                peakEnabled: peak.enabled === true,
+                peakStart: peak.start || '',
+                peakEnd: peak.end || '',
+                peakInput: String(peak.input > 0 ? peak.input : ''),
+                peakOutput: String(peak.output > 0 ? peak.output : ''),
+                peakCacheRead: String(peak.cacheRead > 0 ? peak.cacheRead : ''),
+                peakCacheWrite: String(peak.cacheWrite > 0 ? peak.cacheWrite : ''),
+              }
             }
             const setDraft = (model, field, value) => {
               setDrafts((prev) => {
-                const base = prev[model] || priceOf(model)
+                const base = prev[model] || draftOf(model)
                 return { ...prev, [model]: { ...base, [field]: value } }
               })
             }
@@ -260,7 +289,25 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             const savePrice = (model) => {
               const d = draftOf(model)
               setSaving(model)
-              postAction({ action: 'set-price', model, price: { currency: d.currency, input: d.input, output: d.output, cacheRead: d.cacheRead, cacheWrite: d.cacheWrite } })
+              postAction({
+                action: 'set-price', model,
+                price: {
+                  currency: d.currency,
+                  input: d.input,
+                  output: d.output,
+                  cacheRead: d.cacheRead,
+                  cacheWrite: d.cacheWrite,
+                  peak: {
+                    enabled: !!d.peakEnabled,
+                    start: d.peakStart || '',
+                    end: d.peakEnd || '',
+                    input: d.peakInput,
+                    output: d.peakOutput,
+                    cacheRead: d.peakCacheRead,
+                    cacheWrite: d.peakCacheWrite,
+                  },
+                },
+              })
                 .then(() => { setSaving(null); refresh() })
                 .catch((err) => { setSaving(null); setError((err && err.message) || String(err)) })
             }
@@ -400,6 +447,10 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                   cell('缓存命中', fmt(row.cacheReadTokens)),
                   cell('缓存写入', fmt(row.cacheWriteTokens)),
                   cell('输出', fmt(row.outputTokens))) : null,
+                row && d.peakEnabled && (row.peakInputTokens > 0 || row.peakOutputTokens > 0 || row.peakCacheReadTokens > 0 || row.peakCacheWriteTokens > 0)
+                  ? React.createElement('div', { className: 'mu-peak-stats' },
+                      '高峰 tokens：输入 ' + fmt(row.peakInputTokens) + ' · 输出 ' + fmt(row.peakOutputTokens) + ' · 缓存命中 ' + fmt(row.peakCacheReadTokens) + ' · 缓存写入 ' + fmt(row.peakCacheWriteTokens))
+                  : null,
                 expanded
                   ? React.createElement('div', { className: 'mu-price' },
                       React.createElement('div', { className: 'mu-price-cur' },
@@ -410,6 +461,25 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                         field(model, 'output', '输出', d.output),
                         field(model, 'cacheRead', '缓存命中', d.cacheRead),
                         field(model, 'cacheWrite', '缓存写入', d.cacheWrite)),
+                      React.createElement('div', { className: 'mu-peak' },
+                        React.createElement('label', { className: 'mu-peak-toggle' },
+                          React.createElement('input', { type: 'checkbox', checked: !!d.peakEnabled, onChange: (e) => setDraft(model, 'peakEnabled', e.target.checked) }),
+                          '峰谷定价（高峰期按高峰价，其余按正常价）'),
+                        d.peakEnabled
+                          ? React.createElement('div', { className: 'mu-peak-body' },
+                              React.createElement('div', { className: 'mu-peak-time' },
+                                React.createElement('span', { className: 'mu-field-label' }, '高峰期'),
+                                React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '09:00', value: d.peakStart || '', onChange: (e) => setDraft(model, 'peakStart', e.target.value) }),
+                                React.createElement('span', null, '—'),
+                                React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '18:00', value: d.peakEnd || '', onChange: (e) => setDraft(model, 'peakEnd', e.target.value) }),
+                                React.createElement('span', { className: 'mu-hint' }, 'HH:MM · 服务器本地时间 · 跨零点如 22:00–06:00')),
+                              React.createElement('div', { className: 'mu-price-grid' },
+                                field(model, 'peakInput', '高峰输入', d.peakInput),
+                                field(model, 'peakOutput', '高峰输出', d.peakOutput),
+                                field(model, 'peakCacheRead', '高峰缓存命中', d.peakCacheRead),
+                                field(model, 'peakCacheWrite', '高峰缓存写入', d.peakCacheWrite)),
+                              React.createElement('div', { className: 'mu-hint' }, '高峰价留空则按正常价计费'))
+                          : null),
                       React.createElement('div', { className: 'mu-price-actions' },
                         React.createElement('button', { className: 'mu-btn', disabled: saving === model, onClick: () => savePrice(model) }, saving === model ? '保存中…' : '保存'),
                         React.createElement('button', { className: 'mu-btn', disabled: !presetFor(model), onClick: () => resetPrice(model) }, '重置'),

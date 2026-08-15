@@ -141,6 +141,10 @@ export function apply(ctx) {
             cacheWriteTokens: toCount(value.cacheWriteTokens),
             outputTokens: toCount(value.outputTokens),
             reasoningTokens: toCount(value.reasoningTokens),
+            peakInputTokens: toCount(value.peakInputTokens),
+            peakCacheReadTokens: toCount(value.peakCacheReadTokens),
+            peakCacheWriteTokens: toCount(value.peakCacheWriteTokens),
+            peakOutputTokens: toCount(value.peakOutputTokens),
             providers: Array.isArray(value.providers) ? value.providers.filter((p) => typeof p === 'string') : [],
           })
         }
@@ -154,6 +158,17 @@ export function apply(ctx) {
             output: normalizePrice(value.output),
             cacheRead: normalizePrice(value.cacheRead),
             cacheWrite: normalizePrice(value.cacheWrite),
+            peak: value.peak && typeof value.peak === 'object'
+              ? {
+                  enabled: value.peak.enabled === true,
+                  start: typeof value.peak.start === 'string' ? value.peak.start : '',
+                  end: typeof value.peak.end === 'string' ? value.peak.end : '',
+                  input: normalizePrice(value.peak.input),
+                  output: normalizePrice(value.peak.output),
+                  cacheRead: normalizePrice(value.peak.cacheRead),
+                  cacheWrite: normalizePrice(value.peak.cacheWrite),
+                }
+              : undefined,
           })
         }
       }
@@ -207,7 +222,7 @@ export function apply(ctx) {
     }
     try {
       const state = {
-        version: 1,
+        version: 2,
         targetCurrency,
         stats: Object.fromEntries(stats),
         prices: Object.fromEntries(prices),
@@ -267,10 +282,35 @@ export function apply(ctx) {
     const key = String(model || 'unknown')
     let entry = stats.get(key)
     if (!entry) {
-      entry = { calls: 0, failed: 0, inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, reasoningTokens: 0, providers: [] }
+      entry = { calls: 0, failed: 0, inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, reasoningTokens: 0, peakInputTokens: 0, peakCacheReadTokens: 0, peakCacheWriteTokens: 0, peakOutputTokens: 0, providers: [] }
       stats.set(key, entry)
     }
     return entry
+  }
+
+  // ---------- 峰谷时段判断 ----------
+
+  // 解析 "HH:MM" 为当天分钟数；非法输入返回 null。
+  function parseClock(value) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim())
+    if (!m) return null
+    const hour = Number(m[1])
+    const minute = Number(m[2])
+    if (hour > 23 || minute > 59) return null
+    return hour * 60 + minute
+  }
+
+  // 判断某个时刻是否落在模型的峰值时段（按服务器本地时间）。
+  // start < end：高峰为 [start, end)；start > end：跨零点（如 22:00–06:00）；
+  // start === end：视为未配置高峰时段。
+  function inPeakWindow(peak, date) {
+    if (!peak || peak.enabled !== true) return false
+    const start = parseClock(peak.start)
+    const end = parseClock(peak.end)
+    if (start === null || end === null || start === end) return false
+    const now = date.getHours() * 60 + date.getMinutes()
+    if (start < end) return now >= start && now < end
+    return now >= start || now < end
   }
 
   function presetFor(model) {
@@ -294,6 +334,14 @@ export function apply(ctx) {
     if (entry.calls === 1 && !prices.has(key) && !removed.has(key)) {
       const preset = presetFor(key)
       if (preset) prices.set(key, { ...preset })
+    }
+    // 峰谷定价：按调用结束时刻判断是否落在高峰时段，高峰 token 单独计数，
+    // 非高峰 = 总量 - 高峰量。高峰价格配置由用户为模型启用后生效。
+    if (inPeakWindow(prices.get(key) && prices.get(key).peak, new Date())) {
+      entry.peakInputTokens += usage.inputTokens || 0
+      entry.peakCacheReadTokens += usage.cacheReadTokens || 0
+      entry.peakCacheWriteTokens += usage.cacheWriteTokens || 0
+      entry.peakOutputTokens += usage.outputTokens || 0
     }
     schedulePersist()
   }
@@ -451,6 +499,10 @@ export function apply(ctx) {
         cacheWriteTokens: entry.cacheWriteTokens,
         outputTokens: entry.outputTokens,
         reasoningTokens: entry.reasoningTokens,
+        peakInputTokens: entry.peakInputTokens,
+        peakCacheReadTokens: entry.peakCacheReadTokens,
+        peakCacheWriteTokens: entry.peakCacheWriteTokens,
+        peakOutputTokens: entry.peakOutputTokens,
         providers: entry.providers.slice(),
       })
     }
@@ -477,8 +529,11 @@ export function apply(ctx) {
         if (!model) return { ok: false, error: 'missing model' }
         const src = (body && body.price) || {}
         const existing = prices.get(model)
+        const peakSrc = (src.peak && typeof src.peak === 'object') ? src.peak : {}
         const hasValues = Number(src.input) > 0 || Number(src.output) > 0 || Number(src.cacheRead) > 0 || Number(src.cacheWrite) > 0
-        // 未填任何价格且该模型从未自定义/移除过价格时，套用默认预设，
+          || peakSrc.enabled === true
+          || Number(peakSrc.input) > 0 || Number(peakSrc.output) > 0 || Number(peakSrc.cacheRead) > 0 || Number(peakSrc.cacheWrite) > 0
+        // 未填任何价格（含峰谷配置）且该模型从未自定义/移除过价格时，套用默认预设，
         // 避免"添加模型"写入全零价格并阻断后续自动套用。
         if (!hasValues && !existing && !removed.has(model)) {
           const preset = presetFor(model)
@@ -495,6 +550,15 @@ export function apply(ctx) {
           output: normalizePrice(src.output),
           cacheRead: normalizePrice(src.cacheRead),
           cacheWrite: normalizePrice(src.cacheWrite),
+          peak: {
+            enabled: peakSrc.enabled === true,
+            start: typeof peakSrc.start === 'string' ? peakSrc.start : '',
+            end: typeof peakSrc.end === 'string' ? peakSrc.end : '',
+            input: normalizePrice(peakSrc.input),
+            output: normalizePrice(peakSrc.output),
+            cacheRead: normalizePrice(peakSrc.cacheRead),
+            cacheWrite: normalizePrice(peakSrc.cacheWrite),
+          },
         })
         removed.delete(model)
         schedulePersist()
