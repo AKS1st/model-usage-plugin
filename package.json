@@ -1,5 +1,7 @@
 {
   "name": "musage-stats",
+  "version": "0.1.0",
+  "description": "Per-model token usage, cost estimation and DeepSeek account balance for the DeepSeek Harness Web UI.",
   "private": true,
   "type": "module",
   "exports": {
@@ -14,5 +16,25 @@
     "client": {
       "platform": "web"
     }
+  },
+  "files": [
+    "src",
+    "cordis.patch.yml",
+    "image.png"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "dsh-plugin",
+    "tokens",
+    "usage",
+    "cost",
+    "balance"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AKS1st/model-usage-plugin.git"
   }
 }

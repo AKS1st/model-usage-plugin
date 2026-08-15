@@ -14,19 +14,18 @@ DeepSeek Harness（DSH）Web 插件：统计各模型 tokens 消耗并估算费�
 
 ## 安装
 
-从 GitHub 仓库安装（构建在 `prepare` 脚本里自动执行）：
+从 GitHub 仓库安装（纯 JS，零构建，即装即用）：
 
 ```bash
 dsh plugin --profile web add github:AKS1st/model-usage-plugin
 dsh web   # 重启 web 服务使 profile 生效
 ```
 
-本地开发（先构建再安装）：
+本地安装（clone 后直接指向仓库目录）：
 
 ```bash
-npm install
-npm run build
-dsh plugin --profile web add file:/path/to/model-usage-plugin
+git clone https://github.com/AKS1st/model-usage-plugin.git
+dsh plugin --profile web add /path/to/model-usage-plugin
 dsh web
 ```
 
