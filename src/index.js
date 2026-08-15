@@ -95,6 +95,7 @@ export function apply(ctx) {
   const rates = { ...DEFAULT_RATES }
   let ratesSource = 'default'
   let ratesUpdatedAt = null
+  let ratesFetchedAt = null
   let ratesLoading = false
 
   // API Key 余额查询状态与配置。balanceApiKey 仅保存在会话内存中，
@@ -158,6 +159,19 @@ export function apply(ctx) {
       }
       if (Array.isArray(raw.removed)) for (const key of raw.removed) removed.add(String(key))
       if (CURRENCIES.includes(raw.targetCurrency)) targetCurrency = raw.targetCurrency
+      if (raw.rates && typeof raw.rates === 'object') {
+        let applied = false
+        for (const code of CURRENCIES) {
+          const value = Number(raw.rates[code])
+          if (Number.isFinite(value) && value > 0) {
+            rates[code] = value
+            applied = true
+          }
+        }
+        if (applied && raw.ratesSource === 'live') ratesSource = 'live'
+        if (typeof raw.ratesUpdatedAt === 'string') ratesUpdatedAt = raw.ratesUpdatedAt
+        if (typeof raw.ratesFetchedAt === 'string') ratesFetchedAt = raw.ratesFetchedAt
+      }
       if (typeof raw.balanceBaseUrl === 'string') balanceBaseUrl = raw.balanceBaseUrl
       if (raw.balance && typeof raw.balance === 'object' && raw.balance.status) {
         const stored = raw.balance
@@ -200,6 +214,10 @@ export function apply(ctx) {
         removed: Array.from(removed),
         balanceBaseUrl,
         balance,
+        rates,
+        ratesSource,
+        ratesUpdatedAt,
+        ratesFetchedAt,
       }
       mkdirSync(dshHome, { recursive: true })
       const tmp = dataFile + '.' + process.pid + '.tmp'
@@ -239,6 +257,9 @@ export function apply(ctx) {
   }
 
   loadState()
+
+  // 启动时若没有任何缓存汇率，自动刷新一次并写盘（失败静默，等待客户端按需重试）。
+  if (ratesFetchedAt === null) refreshRates().catch(() => {})
 
   // ---------- 统计采集 ----------
 
@@ -330,6 +351,8 @@ export function apply(ctx) {
           if (applied) {
             ratesSource = 'live'
             ratesUpdatedAt = data.time_last_update_utc || new Date().toISOString()
+            ratesFetchedAt = new Date().toISOString()
+            schedulePersist()
             return true
           }
         } catch {
@@ -339,13 +362,21 @@ export function apply(ctx) {
     } finally {
       ratesLoading = false
     }
-    ratesSource = 'default'
-    ratesUpdatedAt = null
+    // 刷新失败时保留上一次成功缓存（若有），不退回默认值；
+    // 从未成功获取过才回退默认值，等待客户端按需重试。
+    if (ratesFetchedAt === null) {
+      ratesSource = 'default'
+      ratesUpdatedAt = null
+    }
     return false
   }
 
-  // 汇率仅在用户手动点击"更新汇率"（refresh-rates 动作）时刷新，
-  // 不自动刷新（启动 / 定时均不触发）。
+  // 汇率缓存策略：
+  // - 成功获取的汇率连同时间戳写入数据文件（rates / ratesSource /
+  //   ratesUpdatedAt / ratesFetchedAt），进程重启后直接复用缓存；
+  // - 启动时若没有任何缓存汇率（从未成功获取过），自动刷新一次；
+  // - 用户每次打开设置页查看统计时由客户端判断：缓存不超过一周则不自动刷新，
+  //   必须手动点击"更新汇率"；无缓存或缓存超过一周则自动刷新一次。
 
   // ---------- API Key 余额查询 ----------
 
@@ -432,6 +463,7 @@ export function apply(ctx) {
       rates: { ...rates },
       ratesSource,
       ratesUpdatedAt,
+      ratesFetchedAt,
       targetCurrency,
       balance: { ...balance, infos: balance.infos.slice() },
     }
@@ -496,7 +528,7 @@ export function apply(ctx) {
       }
       case 'refresh-rates': {
         await refreshRates()
-        return { rates: { ...rates }, ratesSource, ratesUpdatedAt }
+        return { rates: { ...rates }, ratesSource, ratesUpdatedAt, ratesFetchedAt }
       }
       case 'refresh-balance': {
         await refreshBalance()

@@ -91,6 +91,16 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
           }
           const fmtRate = (n) => (Number.isFinite(n) ? n.toFixed(4) : '-')
 
+          // 汇率缓存有效期：一周（毫秒）。缓存不超过一周时不自动刷新，
+          // 需手动点击"更新汇率"；无缓存或缓存超过一周时自动刷新一次。
+          const RATES_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000
+          const needsAutoRefreshRates = (res) => {
+            if (!res || res.ratesSource !== 'live' || !res.ratesFetchedAt) return true
+            const t = new Date(res.ratesFetchedAt).getTime()
+            if (!Number.isFinite(t)) return true
+            return Date.now() - t > RATES_CACHE_MAX_AGE
+          }
+
           // 与 index.js 的 PRESET_PRICES 保持一致：重置按钮在客户端直接按
           // 预设价写回（走既有 set-price 动作），避免新增宿主动作需重启。
           const PRESET_PRICES = {
@@ -173,16 +183,27 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             const [balBusy, setBalBusy] = React.useState(false)
 
             const refresh = React.useCallback(() => {
-              getStats().then((res) => {
+              return getStats().then((res) => {
                 setView(res)
                 setError(null)
+                return res
               }).catch((err) => {
                 setError((err && err.message) || String(err))
+                return null
               })
             }, [])
 
             React.useEffect(() => {
-              refresh()
+              refresh().then((res) => {
+                // 缓存策略：无缓存或缓存超过一周时自动刷新一次；
+                // 缓存不超过一周时不自动刷新，仅手动点击"更新汇率"。
+                if (needsAutoRefreshRates(res)) {
+                  setBusy('rates')
+                  postAction({ action: 'refresh-rates' })
+                    .then(() => { setBusy(null); refresh() })
+                    .catch(() => { setBusy(null); refresh() })
+                }
+              })
               postAction({ action: 'refresh-balance' }).then(refresh).catch(() => refresh())
               const timer = window.setInterval(() => { if (!document.hidden) refresh() }, 5000)
               return () => window.clearInterval(timer)
@@ -332,11 +353,14 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                 React.createElement('div', { className: 'mu-big-label' }, '账户余额'),
                 React.createElement('div', { className: 'mu-big-sub' }, balSub)))
 
+            const ratesFresh = view.ratesSource === 'live' && !needsAutoRefreshRates(view)
+            const ratesTime = view.ratesFetchedAt ? view.ratesFetchedAt.slice(0, 16).replace('T', ' ') : null
             const curRow = React.createElement('div', { className: 'mu-cur' },
               React.createElement('span', { className: 'mu-cur-label' }, '目标货币'),
               React.createElement('select', { className: 'mu-select', value: target, onChange: (e) => setTarget(e.target.value) }, curOptions),
-              React.createElement('span', { className: 'mu-rate' }, '汇率 USD→' + target + ' ' + fmtRate(rateOf(target))),
+              React.createElement('span', { className: 'mu-rate' }, '汇率 USD→' + target + ' ' + fmtRate(rateOf(target)) + (ratesTime ? ' · 更新于 ' + ratesTime : '')),
               React.createElement('span', { className: view.ratesSource === 'live' ? 'mu-badge-live' : 'mu-badge-default' }, view.ratesSource === 'live' ? '实时' : '默认值'),
+              ratesFresh ? React.createElement('span', { className: 'mu-hint' }, '缓存 7 天内，需手动刷新') : null,
               React.createElement('button', { className: 'mu-btn', disabled: busy === 'rates', onClick: refreshRates }, busy === 'rates' ? '更新中…' : '更新汇率'),
               React.createElement('button', { className: 'mu-btn', disabled: balBusy, onClick: refreshBalance }, balBusy ? '查询中…' : '查询余额'),
               React.createElement('button', { className: 'mu-btn', onClick: () => setBconfOpen((v) => !v) }, bconfOpen ? '收起余额配置' : '余额配置'),

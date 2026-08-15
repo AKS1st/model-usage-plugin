@@ -1,6 +1,6 @@
 {
   "name": "musage-stats",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Per-model token usage, cost estimation and DeepSeek account balance for the DeepSeek Harness Web UI.",
   "private": true,
   "type": "module",
