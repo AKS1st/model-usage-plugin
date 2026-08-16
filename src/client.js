@@ -95,6 +95,16 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             return n.toFixed(6).replace(/\.?0+$/, '')
           }
           const fmtRate = (n) => (Number.isFinite(n) ? n.toFixed(4) : '-')
+          // Host 侧时间戳为 UTC ISO 字符串，展示时需转为浏览器本地时间，
+          // 否则显示的"更新于"时间与真实本地时间相差一个时区。
+          const fmtTs = (iso) => {
+            if (!iso) return '-'
+            const d = new Date(iso)
+            if (Number.isNaN(d.getTime())) return '-'
+            const pad = (n) => String(n).padStart(2, '0')
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+              + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
+          }
 
           // 汇率缓存有效期：一周（毫秒）。缓存不超过一周时不自动刷新，
           // 需手动点击"更新汇率"；无缓存或缓存超过一周时自动刷新一次。
@@ -370,7 +380,7 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             const balSub = balance.status === 'ok'
               ? (balance.infos.length > 1
                   ? balance.infos.map((i) => i.currency + ' ' + fmtMoney(i.total)).join(' · ')
-                  : ('余额更新于 ' + (balance.updatedAt ? balance.updatedAt.slice(0, 16).replace('T', ' ') : '-')))
+                  : ('余额更新于 ' + (balance.updatedAt ? fmtTs(balance.updatedAt) : '-')))
               : (balance.status === 'error'
                   ? (balance.message || '查询失败')
                   : (balance.status === 'loading' ? '正在查询账户余额…' : '点击"查询余额"获取'))
@@ -401,7 +411,7 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                 React.createElement('div', { className: 'mu-big-sub' }, balSub)))
 
             const ratesFresh = view.ratesSource === 'live' && !needsAutoRefreshRates(view)
-            const ratesTime = view.ratesFetchedAt ? view.ratesFetchedAt.slice(0, 16).replace('T', ' ') : null
+            const ratesTime = view.ratesFetchedAt ? fmtTs(view.ratesFetchedAt) : null
             const curRow = React.createElement('div', { className: 'mu-cur' },
               React.createElement('span', { className: 'mu-cur-label' }, '目标货币'),
               React.createElement('select', { className: 'mu-select', value: target, onChange: (e) => setTarget(e.target.value) }, curOptions),
