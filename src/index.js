@@ -104,6 +104,18 @@ const PRESET_PRICES = {
   'glm-4.5-air': { currency: 'CNY', input: 0.93, output: 6.08, cacheRead: 0.18, cacheWrite: 0 },
 }
 
+// 0.3.0 及更早版本的旧 DeepSeek 默认预设价（无峰谷配置）。
+// 仅用于启动迁移：仍停留在旧默认价、或峰谷开关开着但时段为空的已知模型，
+// 自动升级到最新的官方默认预设（两个高峰时段 + 官方定价）。
+const LEGACY_PRESET_PRICES = {
+  'deepseek-v4-flash': { currency: 'CNY', input: 1.0, output: 2.0, cacheRead: 0.02, cacheWrite: 0 },
+  'deepseek-v4-flash-0731': { currency: 'CNY', input: 1.0, output: 2.0, cacheRead: 0.02, cacheWrite: 0 },
+  'deepseek-v4-pro': { currency: 'CNY', input: 3.11, output: 6.22, cacheRead: 0.026, cacheWrite: 0 },
+  'deepseek-v4-pro-0813': { currency: 'CNY', input: 3.11, output: 6.22, cacheRead: 0.026, cacheWrite: 0 },
+  'deepseek-chat': { currency: 'CNY', input: 1.79, output: 6.79, cacheRead: 0.93, cacheWrite: 0 },
+  'deepseek-reasoner': { currency: 'CNY', input: 3.93, output: 15.66, cacheRead: 1.0, cacheWrite: 0 },
+}
+
 export function apply(ctx) {
   const stats = new Map()
   const prices = new Map()
@@ -258,7 +270,7 @@ export function apply(ctx) {
     }
     try {
       const state = {
-        version: 3,
+        version: 4,
         targetCurrency,
         stats: Object.fromEntries(stats),
         prices: Object.fromEntries(prices),
@@ -307,7 +319,45 @@ export function apply(ctx) {
     if (writeTimer.unref) writeTimer.unref()
   }
 
+  // 比较价格的基础五要素（计价货币 + 四档单价），忽略峰谷配置。
+  const sameBasePrice = (a, b) => {
+    if (!a || !b || a.currency !== b.currency) return false
+    return Math.abs((a.input || 0) - (b.input || 0)) < 1e-9
+      && Math.abs((a.output || 0) - (b.output || 0)) < 1e-9
+      && Math.abs((a.cacheRead || 0) - (b.cacheRead || 0)) < 1e-9
+      && Math.abs((a.cacheWrite || 0) - (b.cacheWrite || 0)) < 1e-9
+  }
+  // 高峰窗口是否已配置有效时段（非空且 start !== end）。
+  const hasValidPeakWindow = (window) => !!window && window.enabled === true
+    && parseClock(window.start) !== null && parseClock(window.end) !== null
+    && parseClock(window.start) !== parseClock(window.end)
+
+  // 启动迁移：已知 DeepSeek 模型自动套用最新官方默认预设。
+  // 覆盖三种情况：① 价格仍是 0.3.0 旧默认价（从未改过）；② 与当前预设基础价一致
+  // 但缺峰谷配置；③ 峰谷开关开着但时段为空/无效（配置残缺，高峰价永不生效）。
+  // 已配置有效高峰时段的价格视为用户自定义，保持不动。
+  function migrateLegacyDefaults() {
+    let changed = 0
+    for (const [model, price] of prices) {
+      const preset = presetFor(model)
+      const legacy = LEGACY_PRESET_PRICES[model]
+      if (!preset || !legacy) continue
+      if (hasValidPeakWindow(price.peak) || hasValidPeakWindow(price.peak2)) continue
+      const brokenPeak = (price.peak && price.peak.enabled === true) || (price.peak2 && price.peak2.enabled === true)
+      // 仅当当前预设自带峰谷配置时，"与预设基础价一致但缺峰谷"才需要升级；
+      // chat/reasoner 等无峰谷预设的模型，价格已是最新则无需处理。
+      const presetHasPeak = preset.peak || preset.peak2
+      if (sameBasePrice(price, legacy) || (presetHasPeak && sameBasePrice(price, preset)) || brokenPeak) {
+        prices.set(model, copyPreset(preset))
+        changed++
+      }
+    }
+    return changed
+  }
+
   loadState()
+  // 迁移旧默认价为最新官方默认预设（DeepSeek 两个高峰时段 + 官方定价）。
+  if (migrateLegacyDefaults() > 0) schedulePersist()
 
   // 启动时若没有任何缓存汇率，自动刷新一次并写盘（失败静默，等待客户端按需重试）。
   if (ratesFetchedAt === null) refreshRates().catch(() => {})

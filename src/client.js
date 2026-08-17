@@ -499,9 +499,15 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                         field(model, 'cacheRead', '缓存命中', d.cacheRead),
                         field(model, 'cacheWrite', '缓存写入', d.cacheWrite)),
                       React.createElement('div', { className: 'mu-peak' },
-                        React.createElement('label', { className: 'mu-peak-toggle' },
-                          React.createElement('input', { type: 'checkbox', checked: !!d.peakEnabled, onChange: (e) => setDraft(model, 'peakEnabled', e.target.checked) }),
-                          '峰谷定价（高峰期按高峰价，其余按正常价）'),
+                        React.createElement('div', { className: 'mu-peak-time' },
+                          React.createElement('label', { className: 'mu-peak-toggle' },
+                            React.createElement('input', { type: 'checkbox', checked: !!d.peakEnabled, onChange: (e) => setDraft(model, 'peakEnabled', e.target.checked) }),
+                            '峰谷定价（高峰期按高峰价，其余按正常价）'),
+                          d.peakEnabled
+                            ? React.createElement('label', { className: 'mu-peak-toggle' },
+                                React.createElement('input', { type: 'checkbox', checked: !!d.peak2Enabled, onChange: (e) => setDraft(model, 'peak2Enabled', e.target.checked) }),
+                                '启用第二个高峰时段')
+                            : null),
                         d.peakEnabled
                           ? React.createElement('div', { className: 'mu-peak-body' },
                               React.createElement('div', { className: 'mu-peak-time' },
@@ -510,23 +516,19 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                                 React.createElement('span', null, '—'),
                                 React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '12:00', value: d.peakEnd || '', onChange: (e) => setDraft(model, 'peakEnd', e.target.value) }),
                                 React.createElement('span', { className: 'mu-hint' }, 'HH:MM · 服务器本地时间 · 跨零点如 22:00–06:00')),
+                              d.peak2Enabled
+                                ? React.createElement('div', { className: 'mu-peak-time' },
+                                    React.createElement('span', { className: 'mu-field-label' }, '高峰时段 2'),
+                                    React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '14:00', value: d.peak2Start || '', onChange: (e) => setDraft(model, 'peak2Start', e.target.value) }),
+                                    React.createElement('span', null, '—'),
+                                    React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '18:00', value: d.peak2End || '', onChange: (e) => setDraft(model, 'peak2End', e.target.value) }))
+                                : null,
                               React.createElement('div', { className: 'mu-price-grid' },
                                 field(model, 'peakInput', '高峰输入', d.peakInput),
                                 field(model, 'peakOutput', '高峰输出', d.peakOutput),
                                 field(model, 'peakCacheRead', '高峰缓存命中', d.peakCacheRead),
                                 field(model, 'peakCacheWrite', '高峰缓存写入', d.peakCacheWrite)),
-                              React.createElement('div', { className: 'mu-peak-time' },
-                                React.createElement('label', { className: 'mu-peak-toggle' },
-                                  React.createElement('input', { type: 'checkbox', checked: !!d.peak2Enabled, onChange: (e) => setDraft(model, 'peak2Enabled', e.target.checked) }),
-                                  '启用第二个高峰时段'),
-                                d.peak2Enabled
-                                  ? [
-                                      React.createElement('input', { key: 's2', className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '14:00', value: d.peak2Start || '', onChange: (e) => setDraft(model, 'peak2Start', e.target.value) }),
-                                      React.createElement('span', { key: 'd2' }, '—'),
-                                      React.createElement('input', { key: 'e2', className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '18:00', value: d.peak2End || '', onChange: (e) => setDraft(model, 'peak2End', e.target.value) }),
-                                    ]
-                                  : null),
-                              React.createElement('div', { className: 'mu-hint' }, '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费'))
+                              React.createElement('div', { className: 'mu-hint' }, d.peak2Enabled ? '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费' : '高峰价留空则按正常价计费'))
                           : null),
                       React.createElement('div', { className: 'mu-price-actions' },
                         React.createElement('button', { className: 'mu-btn', disabled: saving === model, onClick: () => savePrice(model) }, saving === model ? '保存中…' : '保存'),
