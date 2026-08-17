@@ -1,5 +1,5 @@
 /**
- * musage-stats — browser half.
+ * model-usage-plugin — browser half.
  *
  * 在 Web 设置的"模型消耗"页签渲染统计与价格配置。与 Host 半部通过
  * /__musage-stats 路由通信（GET 拉取快照，POST 提交操作），数据持久化
@@ -7,7 +7,7 @@
  */
 if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefined') {
   window.__ModuleLoader__.load({
-    id: 'musage-stats',
+    id: 'model-usage-plugin',
     factory(require) {
       const React = require('react')
       const API = '/__musage-stats'

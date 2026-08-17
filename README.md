@@ -1,4 +1,4 @@
-# 模型消耗统计（musage-stats）
+# 模型消耗统计（model-usage-plugin）
 
 DeepSeek Harness（DSH）Web 插件：统计各模型 tokens 消耗并估算费用，显示 API 账户余额。
 
@@ -36,7 +36,7 @@ dsh web
 通过 `dsh plugin`（pnpm 转发）安装到 profile，并自动登记为 bundle 层。卸载：
 
 ```bash
-dsh plugin --profile web remove musage-stats
+dsh plugin --profile web remove model-usage-plugin
 ```
 
 ## 使用

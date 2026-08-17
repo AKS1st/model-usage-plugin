@@ -1,5 +1,5 @@
 /**
- * musage-stats — node half.
+ * model-usage-plugin — node half.
  *
  * 模型消耗统计（静态插件）：拦截每次流式模型调用（llm/stream 瀑布流），
  * 按模型 id 聚合 tokens 消耗（区分缓存命中/未命中/写入），内置主流模型
@@ -14,7 +14,7 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const name = 'musage-stats'
+export const name = 'model-usage-plugin'
 // webServer 由 web 组合保证提供；声明为硬依赖使 apply 等待其就绪后再运行，
 // 避免启动时序抖动导致路由未注册。
 export const inject = ['webServer']

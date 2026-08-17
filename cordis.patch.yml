@@ -1,6 +1,6 @@
-# Bundle patch layer shipped by the musage-stats package. When the package is
+# Bundle patch layer shipped by the model-usage-plugin package. When the package is
 # active in a profile (dsh.profile.bundles), this layer is applied to the
 # composition and mounts the plugin row.
 - insert:
-    - id: musage-stats
-      name: musage-stats
+    - id: model-usage-plugin
+      name: model-usage-plugin
