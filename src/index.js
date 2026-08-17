@@ -120,6 +120,9 @@ export function apply(ctx) {
   const stats = new Map()
   const prices = new Map()
   const removed = new Set()
+  // 数据文件版本（loadState 读取；null = 无文件/未加载）。旧版本数据在启动时
+  // 执行一次默认价迁移，之后 version 升为 4，重启不再重复迁移。
+  let stateVersion = null
   let targetCurrency = 'CNY'
   let disposed = false
 
@@ -171,6 +174,7 @@ export function apply(ctx) {
       if (!existsSync(dataFile)) return
       const raw = JSON.parse(readFileSync(dataFile, 'utf8'))
       if (!raw || typeof raw !== 'object') return
+      if (typeof raw.version === 'number') stateVersion = raw.version
       if (raw.stats && typeof raw.stats === 'object') {
         for (const [key, value] of Object.entries(raw.stats)) {
           if (!value || typeof value !== 'object') continue
@@ -332,10 +336,13 @@ export function apply(ctx) {
     && parseClock(window.start) !== null && parseClock(window.end) !== null
     && parseClock(window.start) !== parseClock(window.end)
 
-  // 启动迁移：已知 DeepSeek 模型自动套用最新官方默认预设。
-  // 覆盖三种情况：① 价格仍是 0.3.0 旧默认价（从未改过）；② 与当前预设基础价一致
-  // 但缺峰谷配置；③ 峰谷开关开着但时段为空/无效（配置残缺，高峰价永不生效）。
-  // 已配置有效高峰时段的价格视为用户自定义，保持不动。
+  // 启动迁移：已知 DeepSeek 模型自动套用最新官方默认预设（仅对旧版本数据执行一次）。
+  // 规则：
+  // ① 已配置有效高峰时段 → 用户自定义，保持不动；
+  // ② 峰谷开关明确关闭（enabled === false）→ 保持关闭，不重新打开；
+  // ③ 基础价仍是旧默认价或当前官方基础价 → 整体升级为最新官方预设（含两个高峰时段）；
+  // ④ 基础价是用户自定义但峰谷窗口残缺（开关开着、时段为空/无效）→ 保留基础价，
+  //    仅关闭残缺窗口，不覆盖自定义单价。
   function migrateLegacyDefaults() {
     let changed = 0
     for (const [model, price] of prices) {
@@ -343,12 +350,16 @@ export function apply(ctx) {
       const legacy = LEGACY_PRESET_PRICES[model]
       if (!preset || !legacy) continue
       if (hasValidPeakWindow(price.peak) || hasValidPeakWindow(price.peak2)) continue
+      if ((price.peak && price.peak.enabled === false) || (price.peak2 && price.peak2.enabled === false)) continue
       const brokenPeak = (price.peak && price.peak.enabled === true) || (price.peak2 && price.peak2.enabled === true)
-      // 仅当当前预设自带峰谷配置时，"与预设基础价一致但缺峰谷"才需要升级；
-      // chat/reasoner 等无峰谷预设的模型，价格已是最新则无需处理。
       const presetHasPeak = preset.peak || preset.peak2
-      if (sameBasePrice(price, legacy) || (presetHasPeak && sameBasePrice(price, preset)) || brokenPeak) {
+      if (sameBasePrice(price, legacy) || (presetHasPeak && sameBasePrice(price, preset))) {
         prices.set(model, copyPreset(preset))
+        changed++
+      } else if (brokenPeak) {
+        // 保留自定义基础价，仅关闭残缺的高峰窗口（用户可自行重新启用并补齐时段）。
+        const next = { ...price, peak: price.peak ? { ...price.peak, enabled: false } : undefined, peak2: price.peak2 ? { ...price.peak2, enabled: false } : undefined }
+        prices.set(model, next)
         changed++
       }
     }
@@ -357,7 +368,8 @@ export function apply(ctx) {
 
   loadState()
   // 迁移旧默认价为最新官方默认预设（DeepSeek 两个高峰时段 + 官方定价）。
-  if (migrateLegacyDefaults() > 0) schedulePersist()
+  // 仅在旧版本（version < 4）数据上执行一次；已迁移或新安装不重复处理。
+  if (stateVersion !== null && stateVersion < 4 && migrateLegacyDefaults() > 0) schedulePersist()
 
   // 启动时若没有任何缓存汇率，自动刷新一次并写盘（失败静默，等待客户端按需重试）。
   if (ratesFetchedAt === null) refreshRates().catch(() => {})
