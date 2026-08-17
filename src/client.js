@@ -120,12 +120,30 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
           // 预设价写回（走既有 set-price 动作），避免新增宿主动作需重启。
           const PRESET_PRICES = {
             // DeepSeek（国产，CNY 元 / 百万 tokens）
-            'deepseek-v4-flash': { currency: 'CNY', input: 1.0, output: 2.0, cacheRead: 0.02, cacheWrite: 0 },
-            'deepseek-v4-flash-0731': { currency: 'CNY', input: 1.0, output: 2.0, cacheRead: 0.02, cacheWrite: 0 },
-            'deepseek-v4-pro': { currency: 'CNY', input: 3.11, output: 6.22, cacheRead: 0.026, cacheWrite: 0 },
-            'deepseek-v4-pro-0813': { currency: 'CNY', input: 3.11, output: 6.22, cacheRead: 0.026, cacheWrite: 0 },
-            'deepseek-chat': { currency: 'CNY', input: 1.79, output: 6.79, cacheRead: 0.93, cacheWrite: 0 },
-            'deepseek-reasoner': { currency: 'CNY', input: 3.93, output: 15.66, cacheRead: 1.0, cacheWrite: 0 },
+            // 2026-08-17 起官方改为峰谷计费：高峰时段（每日 09:00–12:00、14:00–18:00，
+            // 服务器本地时间）价格为空闲时段 2 倍；V4 系列预置两个官方高峰时段。
+            'deepseek-v4-flash': {
+              currency: 'CNY', input: 1.5, output: 4.5, cacheRead: 0.05, cacheWrite: 0,
+              peak: { enabled: true, start: '09:00', end: '12:00', input: 3, output: 9, cacheRead: 0.1, cacheWrite: 0 },
+              peak2: { enabled: true, start: '14:00', end: '18:00' },
+            },
+            'deepseek-v4-flash-0731': {
+              currency: 'CNY', input: 1.5, output: 4.5, cacheRead: 0.05, cacheWrite: 0,
+              peak: { enabled: true, start: '09:00', end: '12:00', input: 3, output: 9, cacheRead: 0.1, cacheWrite: 0 },
+              peak2: { enabled: true, start: '14:00', end: '18:00' },
+            },
+            'deepseek-v4-pro': {
+              currency: 'CNY', input: 4.5, output: 13.5, cacheRead: 0.15, cacheWrite: 0,
+              peak: { enabled: true, start: '09:00', end: '12:00', input: 9, output: 27, cacheRead: 0.3, cacheWrite: 0 },
+              peak2: { enabled: true, start: '14:00', end: '18:00' },
+            },
+            'deepseek-v4-pro-0813': {
+              currency: 'CNY', input: 4.5, output: 13.5, cacheRead: 0.15, cacheWrite: 0,
+              peak: { enabled: true, start: '09:00', end: '12:00', input: 9, output: 27, cacheRead: 0.3, cacheWrite: 0 },
+              peak2: { enabled: true, start: '14:00', end: '18:00' },
+            },
+            'deepseek-chat': { currency: 'CNY', input: 2, output: 8, cacheRead: 0.5, cacheWrite: 0 },
+            'deepseek-reasoner': { currency: 'CNY', input: 4, output: 16, cacheRead: 1, cacheWrite: 0 },
             // OpenAI（海外，USD / 百万 tokens）
             'gpt-5.6-luna': { currency: 'USD', input: 0.1, output: 0.6, cacheRead: 0.01, cacheWrite: 0.125 },
             'gpt-5.6-terra': { currency: 'USD', input: 1, output: 6, cacheRead: 0.1, cacheWrite: 1.25 },
@@ -241,8 +259,8 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             const priceOf = (model) => {
               const p = priceMap[model]
               return p
-                ? { currency: p.currency || 'USD', input: p.input, output: p.output, cacheRead: p.cacheRead, cacheWrite: p.cacheWrite, peak: p.peak || null }
-                : { currency: 'USD', input: 0, output: 0, cacheRead: 0, cacheWrite: 0, peak: null }
+                ? { currency: p.currency || 'USD', input: p.input, output: p.output, cacheRead: p.cacheRead, cacheWrite: p.cacheWrite, peak: p.peak || null, peak2: p.peak2 || null }
+                : { currency: 'USD', input: 0, output: 0, cacheRead: 0, cacheWrite: 0, peak: null, peak2: null }
             }
             const rowOf = (model) => rows.find((r) => r.model === model)
             const costOf = (model) => {
@@ -266,6 +284,7 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
               if (d) return d
               const p = priceOf(model)
               const peak = p.peak || {}
+              const peak2 = p.peak2 || {}
               return {
                 currency: p.currency,
                 input: String(p.input || ''),
@@ -279,6 +298,9 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                 peakOutput: String(peak.output > 0 ? peak.output : ''),
                 peakCacheRead: String(peak.cacheRead > 0 ? peak.cacheRead : ''),
                 peakCacheWrite: String(peak.cacheWrite > 0 ? peak.cacheWrite : ''),
+                peak2Enabled: peak2.enabled === true,
+                peak2Start: peak2.start || '',
+                peak2End: peak2.end || '',
               }
             }
             const setDraft = (model, field, value) => {
@@ -315,6 +337,11 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                     output: d.peakOutput,
                     cacheRead: d.peakCacheRead,
                     cacheWrite: d.peakCacheWrite,
+                  },
+                  peak2: {
+                    enabled: !!d.peak2Enabled,
+                    start: d.peak2Start || '',
+                    end: d.peak2End || '',
                   },
                 },
               })
@@ -478,17 +505,28 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                         d.peakEnabled
                           ? React.createElement('div', { className: 'mu-peak-body' },
                               React.createElement('div', { className: 'mu-peak-time' },
-                                React.createElement('span', { className: 'mu-field-label' }, '高峰期'),
+                                React.createElement('span', { className: 'mu-field-label' }, '高峰时段 1'),
                                 React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '09:00', value: d.peakStart || '', onChange: (e) => setDraft(model, 'peakStart', e.target.value) }),
                                 React.createElement('span', null, '—'),
-                                React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '18:00', value: d.peakEnd || '', onChange: (e) => setDraft(model, 'peakEnd', e.target.value) }),
+                                React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '12:00', value: d.peakEnd || '', onChange: (e) => setDraft(model, 'peakEnd', e.target.value) }),
                                 React.createElement('span', { className: 'mu-hint' }, 'HH:MM · 服务器本地时间 · 跨零点如 22:00–06:00')),
                               React.createElement('div', { className: 'mu-price-grid' },
                                 field(model, 'peakInput', '高峰输入', d.peakInput),
                                 field(model, 'peakOutput', '高峰输出', d.peakOutput),
                                 field(model, 'peakCacheRead', '高峰缓存命中', d.peakCacheRead),
                                 field(model, 'peakCacheWrite', '高峰缓存写入', d.peakCacheWrite)),
-                              React.createElement('div', { className: 'mu-hint' }, '高峰价留空则按正常价计费'))
+                              React.createElement('div', { className: 'mu-peak-time' },
+                                React.createElement('label', { className: 'mu-peak-toggle' },
+                                  React.createElement('input', { type: 'checkbox', checked: !!d.peak2Enabled, onChange: (e) => setDraft(model, 'peak2Enabled', e.target.checked) }),
+                                  '启用第二个高峰时段'),
+                                d.peak2Enabled
+                                  ? [
+                                      React.createElement('input', { key: 's2', className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '14:00', value: d.peak2Start || '', onChange: (e) => setDraft(model, 'peak2Start', e.target.value) }),
+                                      React.createElement('span', { key: 'd2' }, '—'),
+                                      React.createElement('input', { key: 'e2', className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '18:00', value: d.peak2End || '', onChange: (e) => setDraft(model, 'peak2End', e.target.value) }),
+                                    ]
+                                  : null),
+                              React.createElement('div', { className: 'mu-hint' }, '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费'))
                           : null),
                       React.createElement('div', { className: 'mu-price-actions' },
                         React.createElement('button', { className: 'mu-btn', disabled: saving === model, onClick: () => savePrice(model) }, saving === model ? '保存中…' : '保存'),

@@ -28,12 +28,31 @@ const DEFAULT_RATES = { USD: 1, CNY: 7.15, EUR: 0.92, GBP: 0.79, JPY: 149, HKD: 
 // 国产模型 CNY 数值 = 美元参考价 × 7.15（通常汇率）折算。
 const PRESET_PRICES = {
   // DeepSeek（国产，CNY 元 / 百万 tokens）
-  'deepseek-v4-flash': { currency: 'CNY', input: 1.0, output: 2.0, cacheRead: 0.02, cacheWrite: 0 },
-  'deepseek-v4-flash-0731': { currency: 'CNY', input: 1.0, output: 2.0, cacheRead: 0.02, cacheWrite: 0 },
-  'deepseek-v4-pro': { currency: 'CNY', input: 3.11, output: 6.22, cacheRead: 0.026, cacheWrite: 0 },
-  'deepseek-v4-pro-0813': { currency: 'CNY', input: 3.11, output: 6.22, cacheRead: 0.026, cacheWrite: 0 },
-  'deepseek-chat': { currency: 'CNY', input: 1.79, output: 6.79, cacheRead: 0.93, cacheWrite: 0 },
-  'deepseek-reasoner': { currency: 'CNY', input: 3.93, output: 15.66, cacheRead: 1.0, cacheWrite: 0 },
+  // 2026-08-17 起官方改为峰谷计费：高峰时段（每日 09:00–12:00、14:00–18:00，
+  // 服务器本地时间，对应官方 UTC 01:00–04:00、06:00–10:00）价格为空闲时段 2 倍。
+  // V4 系列默认预设预置两个官方高峰时段与高峰价；chat/reasoner 为官方最新价。
+  'deepseek-v4-flash': {
+    currency: 'CNY', input: 1.5, output: 4.5, cacheRead: 0.05, cacheWrite: 0,
+    peak: { enabled: true, start: '09:00', end: '12:00', input: 3, output: 9, cacheRead: 0.1, cacheWrite: 0 },
+    peak2: { enabled: true, start: '14:00', end: '18:00' },
+  },
+  'deepseek-v4-flash-0731': {
+    currency: 'CNY', input: 1.5, output: 4.5, cacheRead: 0.05, cacheWrite: 0,
+    peak: { enabled: true, start: '09:00', end: '12:00', input: 3, output: 9, cacheRead: 0.1, cacheWrite: 0 },
+    peak2: { enabled: true, start: '14:00', end: '18:00' },
+  },
+  'deepseek-v4-pro': {
+    currency: 'CNY', input: 4.5, output: 13.5, cacheRead: 0.15, cacheWrite: 0,
+    peak: { enabled: true, start: '09:00', end: '12:00', input: 9, output: 27, cacheRead: 0.3, cacheWrite: 0 },
+    peak2: { enabled: true, start: '14:00', end: '18:00' },
+  },
+  'deepseek-v4-pro-0813': {
+    currency: 'CNY', input: 4.5, output: 13.5, cacheRead: 0.15, cacheWrite: 0,
+    peak: { enabled: true, start: '09:00', end: '12:00', input: 9, output: 27, cacheRead: 0.3, cacheWrite: 0 },
+    peak2: { enabled: true, start: '14:00', end: '18:00' },
+  },
+  'deepseek-chat': { currency: 'CNY', input: 2, output: 8, cacheRead: 0.5, cacheWrite: 0 },
+  'deepseek-reasoner': { currency: 'CNY', input: 4, output: 16, cacheRead: 1, cacheWrite: 0 },
   // OpenAI（海外，USD / 百万 tokens）
   'gpt-5.6-luna': { currency: 'USD', input: 0.1, output: 0.6, cacheRead: 0.01, cacheWrite: 0.125 },
   'gpt-5.6-terra': { currency: 'USD', input: 1, output: 6, cacheRead: 0.1, cacheWrite: 1.25 },
@@ -123,6 +142,16 @@ export function apply(ctx) {
     return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0
   }
 
+  // 深拷贝默认预设：peak / peak2 是内嵌对象，避免价格对象与常量共享引用。
+  const copyPreset = (preset) => {
+    if (!preset) return undefined
+    return {
+      ...preset,
+      peak: preset.peak ? { ...preset.peak } : undefined,
+      peak2: preset.peak2 ? { ...preset.peak2 } : undefined,
+    }
+  }
+
   // ---------- 持久化 ----------
 
   function loadState() {
@@ -167,6 +196,13 @@ export function apply(ctx) {
                   output: normalizePrice(value.peak.output),
                   cacheRead: normalizePrice(value.peak.cacheRead),
                   cacheWrite: normalizePrice(value.peak.cacheWrite),
+                }
+              : undefined,
+            peak2: value.peak2 && typeof value.peak2 === 'object'
+              ? {
+                  enabled: value.peak2.enabled === true,
+                  start: typeof value.peak2.start === 'string' ? value.peak2.start : '',
+                  end: typeof value.peak2.end === 'string' ? value.peak2.end : '',
                 }
               : undefined,
           })
@@ -222,7 +258,7 @@ export function apply(ctx) {
     }
     try {
       const state = {
-        version: 2,
+        version: 3,
         targetCurrency,
         stats: Object.fromEntries(stats),
         prices: Object.fromEntries(prices),
@@ -300,17 +336,25 @@ export function apply(ctx) {
     return hour * 60 + minute
   }
 
-  // 判断某个时刻是否落在模型的峰值时段（按服务器本地时间）。
+  // 判断某个时刻是否落在单个高峰窗口内（按服务器本地时间）。
   // start < end：高峰为 [start, end)；start > end：跨零点（如 22:00–06:00）；
   // start === end：视为未配置高峰时段。
-  function inPeakWindow(peak, date) {
-    if (!peak || peak.enabled !== true) return false
-    const start = parseClock(peak.start)
-    const end = parseClock(peak.end)
+  function inPeakWindow(window, date) {
+    if (!window || window.enabled !== true) return false
+    const start = parseClock(window.start)
+    const end = parseClock(window.end)
     if (start === null || end === null || start === end) return false
     const now = date.getHours() * 60 + date.getMinutes()
     if (start < end) return now >= start && now < end
     return now >= start || now < end
+  }
+
+  // 模型是否落在任一高峰窗口：最多两个高峰时段（peak / peak2），
+  // 两个窗口共用同一组高峰价，因此高峰 token 合并统计即可精确计费。
+  // 总开关为 peak.enabled（峰谷定价开关），关闭时两个窗口都不生效。
+  function inAnyPeakWindow(price, date) {
+    if (!price || !price.peak || price.peak.enabled !== true) return false
+    return inPeakWindow(price.peak, date) || inPeakWindow(price.peak2, date)
   }
 
   function presetFor(model) {
@@ -333,11 +377,11 @@ export function apply(ctx) {
     // 首次观测到该模型且用户未自定义/移除价格时，自动套用默认预设（含计价货币）。
     if (entry.calls === 1 && !prices.has(key) && !removed.has(key)) {
       const preset = presetFor(key)
-      if (preset) prices.set(key, { ...preset })
+      if (preset) prices.set(key, copyPreset(preset))
     }
-    // 峰谷定价：按调用结束时刻判断是否落在高峰时段，高峰 token 单独计数，
-    // 非高峰 = 总量 - 高峰量。高峰价格配置由用户为模型启用后生效。
-    if (inPeakWindow(prices.get(key) && prices.get(key).peak, new Date())) {
+    // 峰谷定价：按调用结束时刻判断是否落在任一高峰时段，高峰 token 单独计数，
+    // 非高峰 = 总量 - 高峰量。高峰价格配置由用户为模型启用后生效（最多两个高峰时段）。
+    if (inAnyPeakWindow(prices.get(key), new Date())) {
       entry.peakInputTokens += usage.inputTokens || 0
       entry.peakCacheReadTokens += usage.cacheReadTokens || 0
       entry.peakCacheWriteTokens += usage.cacheWriteTokens || 0
@@ -530,15 +574,17 @@ export function apply(ctx) {
         const src = (body && body.price) || {}
         const existing = prices.get(model)
         const peakSrc = (src.peak && typeof src.peak === 'object') ? src.peak : {}
+        const peak2Src = (src.peak2 && typeof src.peak2 === 'object') ? src.peak2 : {}
         const hasValues = Number(src.input) > 0 || Number(src.output) > 0 || Number(src.cacheRead) > 0 || Number(src.cacheWrite) > 0
           || peakSrc.enabled === true
           || Number(peakSrc.input) > 0 || Number(peakSrc.output) > 0 || Number(peakSrc.cacheRead) > 0 || Number(peakSrc.cacheWrite) > 0
+          || peak2Src.enabled === true
         // 未填任何价格（含峰谷配置）且该模型从未自定义/移除过价格时，套用默认预设，
         // 避免"添加模型"写入全零价格并阻断后续自动套用。
         if (!hasValues && !existing && !removed.has(model)) {
           const preset = presetFor(model)
           if (preset) {
-            prices.set(model, { ...preset })
+            prices.set(model, copyPreset(preset))
             removed.delete(model)
             schedulePersist()
             return { ok: true }
@@ -558,6 +604,11 @@ export function apply(ctx) {
             output: normalizePrice(peakSrc.output),
             cacheRead: normalizePrice(peakSrc.cacheRead),
             cacheWrite: normalizePrice(peakSrc.cacheWrite),
+          },
+          peak2: {
+            enabled: peak2Src.enabled === true,
+            start: typeof peak2Src.start === 'string' ? peak2Src.start : '',
+            end: typeof peak2Src.end === 'string' ? peak2Src.end : '',
           },
         })
         removed.delete(model)
@@ -579,7 +630,7 @@ export function apply(ctx) {
       case 'load-default-prices': {
         prices.clear()
         removed.clear()
-        for (const [model, preset] of Object.entries(PRESET_PRICES)) prices.set(model, { ...preset })
+        for (const [model, preset] of Object.entries(PRESET_PRICES)) prices.set(model, copyPreset(preset))
         schedulePersist()
         return { ok: true }
       }
