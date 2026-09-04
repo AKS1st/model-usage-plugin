@@ -5,12 +5,11 @@
  * /__musage-stats 路由通信（GET 拉取快照，POST 提交操作），数据持久化
  * 由 Host 负责（$DSH_HOME/musage-stats.json）。
  */
-if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefined') {
-  window.__ModuleLoader__.load({
-    id: 'model-usage-plugin',
-    factory(require) {
-      const React = require('react')
-      const API = '/__musage-stats'
+import * as React from 'react'
+
+export const inject = ['slots', 'locale']
+
+const API = '/__musage-stats'
       const NS = 'model-usage-plugin'
       const ZH = {
         title: '模型消耗统计', totalTokens: '总 Token', cacheMiss: '未命中', balance: '账户余额', loading: '正在加载模型消耗数据…', retrying: '正在自动重试…', loadFailed: '加载失败：{error}', targetCurrency: '目标货币', rate: '汇率 USD→{target} {rate}', updatedAt: '更新于 {time}', live: '实时', defaultRate: '默认值', cacheHint: '缓存 7 天内，需手动刷新', refreshRates: '更新汇率', refreshing: '更新中…', queryBalance: '查询余额', querying: '查询中…', balanceConfig: '余额配置', collapseBalanceConfig: '收起余额配置', onlyUsed: '仅显示已调用模型', balanceKey: 'API Key（留空则用 DEEPSEEK_API_KEY）', balanceBaseUrl: '余额接口 Base URL', saveAndQuery: '保存并查询', error: '错误：{error}', calls: '调用', tokens: 'tokens', cost: '费用({target})', failed: '失败', callMeta: '{calls} 次调用', failedMeta: ' · 失败 {failed}', costMeta: ' · 费用 {cost} {target}', notConfigured: '（未配置价格）', unused: '尚未调用', peakTokens: '高峰 tokens：输入 {input} · 输出 {output} · 缓存命中 {read} · 缓存写入 {write}', pricingCurrency: '计价货币', input: '输入', output: '输出', cacheRead: '缓存命中', cacheWrite: '缓存写入', peakPricing: '峰谷定价（高峰期按高峰价，其余按正常价）', secondPeak: '启用第二个高峰时段', peakPeriod: '高峰时段 {n}', timeHint: 'HH:MM · 服务器本地时间 · 跨零点如 22:00–06:00', peakInput: '高峰输入', peakOutput: '高峰输出', peakCacheRead: '高峰缓存命中', peakCacheWrite: '高峰缓存写入', sharedPeak: '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费', normalPeak: '高峰价留空则按正常价计费', saving: '保存中…', save: '保存', reset: '重置', remove: '移除', unit: '单价单位：{currency} / 百万 tokens · 展示按目标货币换算', adjust: '调整价格', configure: '配置价格', modelPlaceholder: '模型 id，如 deepseek-chat（预配置价格）', add: '添加', emptyUsed: '暂无模型调用记录，发送消息后自动统计（取消勾选“仅显示已调用模型”可查看价格配置）', empty: '暂无模型，可通过下方输入框添加', balanceLoading: '查询中…', balanceError: '查询失败', balanceNone: '未查询', balanceUpdated: '余额更新于 {time}', balanceQuerying: '正在查询账户余额…', balanceHint: '点击“查询余额”获取', errorPrefix: '错误：{error}', emptyUsed: '暂无模型调用记录，发送消息后自动统计（取消勾选“仅显示已调用模型”可查看价格配置）', empty: '暂无模型，可通过下方输入框添加', modelPlaceholder: '模型 id，如 deepseek-chat（预配置价格）', add: '添加', sharedPeak: '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费', normalPeak: '高峰价留空则按正常价计费', save: '保存', saving: '保存中…', reset: '重置', remove: '移除', unit: '单价单位：{currency} / 百万 tokens · 展示按目标货币换算', adjust: '调整价格', configure: '配置价格' }
@@ -25,8 +24,7 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
         body: JSON.stringify(body),
       }).then((res) => res.json())
 
-      return {
-        apply(ctx) {
+export function apply(ctx) {
           const slots = ctx.get('slots')
           if (slots === undefined) return
           const locale = ctx.get('locale')
@@ -574,8 +572,5 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             { name: 'settings.section', id: 'model-usage', order: 30, label: () => translate('title'), locale: NS },
             (props) => React.createElement(ModelUsagePage, props),
           ))
-        },
-      }
-    },
-  })
-}
+        }
+
