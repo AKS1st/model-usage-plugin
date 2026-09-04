@@ -13,11 +13,12 @@
  */
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { isLoopbackRequest, parseJsonRequest } from './route-security.js'
 
 export const name = 'model-usage-plugin'
-// webServer 由 web 组合保证提供；声明为硬依赖使 apply 等待其就绪后再运行，
-// 避免启动时序抖动导致路由未注册。
-export const inject = ['webServer']
+// webServer 和 timer 由 web 组合提供；声明为硬依赖使 apply 等待它们就绪，
+// 路由和持久化定时器都随插件生命周期建立与清理。
+export const inject = ['webServer', 'timer']
 
 const CURRENCIES = ['USD', 'CNY', 'EUR', 'GBP', 'JPY', 'HKD', 'AUD', 'CAD']
 // 各货币相对 USD 的通常汇率（在线查询失败时的默认值，1 USD = X）。
@@ -267,11 +268,14 @@ export function apply(ctx) {
   let dirty = false
   let writeTimer = null
 
+  function stopWriteTimer() {
+    if (writeTimer === null) return
+    writeTimer()
+    writeTimer = null
+  }
+
   function flushSync() {
-    if (writeTimer !== null) {
-      clearInterval(writeTimer)
-      writeTimer = null
-    }
+    stopWriteTimer()
     try {
       const state = {
         version: 4,
@@ -295,14 +299,10 @@ export function apply(ctx) {
       // 写盘失败：保留 dirty 并重新武装定时器，稍后重试。
       dirty = true
       if (writeTimer === null) {
-        writeTimer = setInterval(() => {
+        writeTimer = ctx.interval(() => {
           if (dirty) flushSync()
-          else if (writeTimer !== null) {
-            clearInterval(writeTimer)
-            writeTimer = null
-          }
+          else stopWriteTimer()
         }, 4000)
-        if (writeTimer.unref) writeTimer.unref()
       }
     }
   }
@@ -313,14 +313,10 @@ export function apply(ctx) {
     if (disposed) return
     dirty = true
     if (writeTimer !== null) return
-    writeTimer = setInterval(() => {
+    writeTimer = ctx.interval(() => {
       if (dirty) flushSync()
-      else if (writeTimer !== null) {
-        clearInterval(writeTimer)
-        writeTimer = null
-      }
+      else stopWriteTimer()
     }, 4000)
-    if (writeTimer.unref) writeTimer.unref()
   }
 
   // 比较价格的基础五要素（计价货币 + 四档单价），忽略峰谷配置。
@@ -745,41 +741,16 @@ export function apply(ctx) {
     res.end(text)
   }
 
-  function readBody(req) {
-    return new Promise((resolve, reject) => {
-      const chunks = []
-      let size = 0
-      let overflow = false
-      req.on('data', (chunk) => {
-        size += chunk.length
-        if (size > 1024 * 1024) {
-          overflow = true
-          return
-        }
-        chunks.push(chunk)
-      })
-      req.on('end', () => {
-        if (overflow) {
-          reject(new Error('body too large'))
-          return
-        }
-        try {
-          const text = Buffer.concat(chunks).toString('utf8')
-          resolve(text.trim() ? JSON.parse(text) : {})
-        } catch (err) {
-          reject(err)
-        }
-      })
-      req.on('error', reject)
-    })
-  }
-
   const disposers = []
   if (webServer !== undefined) {
     disposers.push(webServer.register({
       kind: 'exact',
       path: '/__musage-stats',
       handler: (req, res) => {
+        if (!isLoopbackRequest(req)) {
+          sendJson(res, { ok: false, error: 'loopback access required' }, 403)
+          return
+        }
         if (req.method === 'GET') {
           sendJson(res, snapshot())
           return
@@ -788,7 +759,7 @@ export function apply(ctx) {
           sendJson(res, { ok: false, error: 'method not allowed' }, 405)
           return
         }
-        readBody(req).then((body) => {
+        parseJsonRequest(req).then((body) => {
           return handleAction(body).then((result) => sendJson(res, result))
         }).catch(() => {
           sendJson(res, { ok: false, error: 'bad request' }, 400)
@@ -799,10 +770,7 @@ export function apply(ctx) {
 
   ctx.on('dispose', () => {
     disposed = true
-    if (writeTimer !== null) {
-      clearInterval(writeTimer)
-      writeTimer = null
-    }
+    stopWriteTimer()
     flushSync()
     for (const dispose of disposers) {
       try {

@@ -11,6 +11,12 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
     factory(require) {
       const React = require('react')
       const API = '/__musage-stats'
+      const NS = 'model-usage-plugin'
+      const ZH = {
+        title: '模型消耗统计', totalTokens: '总 Token', cacheMiss: '未命中', balance: '账户余额', loading: '正在加载模型消耗数据…', retrying: '正在自动重试…', loadFailed: '加载失败：{error}', targetCurrency: '目标货币', rate: '汇率 USD→{target} {rate}', updatedAt: '更新于 {time}', live: '实时', defaultRate: '默认值', cacheHint: '缓存 7 天内，需手动刷新', refreshRates: '更新汇率', refreshing: '更新中…', queryBalance: '查询余额', querying: '查询中…', balanceConfig: '余额配置', collapseBalanceConfig: '收起余额配置', onlyUsed: '仅显示已调用模型', balanceKey: 'API Key（留空则用 DEEPSEEK_API_KEY）', balanceBaseUrl: '余额接口 Base URL', saveAndQuery: '保存并查询', error: '错误：{error}', calls: '调用', tokens: 'tokens', cost: '费用({target})', failed: '失败', callMeta: '{calls} 次调用', failedMeta: ' · 失败 {failed}', costMeta: ' · 费用 {cost} {target}', notConfigured: '（未配置价格）', unused: '尚未调用', peakTokens: '高峰 tokens：输入 {input} · 输出 {output} · 缓存命中 {read} · 缓存写入 {write}', pricingCurrency: '计价货币', input: '输入', output: '输出', cacheRead: '缓存命中', cacheWrite: '缓存写入', peakPricing: '峰谷定价（高峰期按高峰价，其余按正常价）', secondPeak: '启用第二个高峰时段', peakPeriod: '高峰时段 {n}', timeHint: 'HH:MM · 服务器本地时间 · 跨零点如 22:00–06:00', peakInput: '高峰输入', peakOutput: '高峰输出', peakCacheRead: '高峰缓存命中', peakCacheWrite: '高峰缓存写入', sharedPeak: '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费', normalPeak: '高峰价留空则按正常价计费', saving: '保存中…', save: '保存', reset: '重置', remove: '移除', unit: '单价单位：{currency} / 百万 tokens · 展示按目标货币换算', adjust: '调整价格', configure: '配置价格', modelPlaceholder: '模型 id，如 deepseek-chat（预配置价格）', add: '添加', emptyUsed: '暂无模型调用记录，发送消息后自动统计（取消勾选“仅显示已调用模型”可查看价格配置）', empty: '暂无模型，可通过下方输入框添加', balanceLoading: '查询中…', balanceError: '查询失败', balanceNone: '未查询', balanceUpdated: '余额更新于 {time}', balanceQuerying: '正在查询账户余额…', balanceHint: '点击“查询余额”获取', errorPrefix: '错误：{error}', emptyUsed: '暂无模型调用记录，发送消息后自动统计（取消勾选“仅显示已调用模型”可查看价格配置）', empty: '暂无模型，可通过下方输入框添加', modelPlaceholder: '模型 id，如 deepseek-chat（预配置价格）', add: '添加', sharedPeak: '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费', normalPeak: '高峰价留空则按正常价计费', save: '保存', saving: '保存中…', reset: '重置', remove: '移除', unit: '单价单位：{currency} / 百万 tokens · 展示按目标货币换算', adjust: '调整价格', configure: '配置价格' }
+      const EN = { title: 'Model usage statistics', totalTokens: 'Total tokens', balance: 'Account balance', loading: 'Loading model usage data…', retrying: 'Retrying automatically…', loadFailed: 'Load failed: {error}', targetCurrency: 'Target currency', rate: 'USD→{target} rate {rate}', updatedAt: 'Updated {time}', live: 'Live', defaultRate: 'Default', cacheHint: 'Cached for 7 days; refresh manually', refreshRates: 'Refresh rates', refreshing: 'Refreshing…', queryBalance: 'Query balance', querying: 'Querying…', balanceConfig: 'Balance settings', collapseBalanceConfig: 'Hide balance settings', onlyUsed: 'Show used models only', balanceKey: 'API key (leave blank to use DEEPSEEK_API_KEY)', balanceBaseUrl: 'Balance API base URL', saveAndQuery: 'Save and query', error: 'Error: {error}', calls: 'Calls', tokens: 'Tokens', cost: 'Cost ({target})', failed: 'Failed', callMeta: '{calls} calls', failedMeta: ' · {failed} failed', costMeta: ' · Cost {cost} {target}', notConfigured: ' (price not configured)', unused: 'Not called yet', peakTokens: 'Peak tokens: input {input} · output {output} · cache read {read} · cache write {write}', pricingCurrency: 'Pricing currency', input: 'Input', output: 'Output', cacheRead: 'Cache read', cacheWrite: 'Cache write', peakPricing: 'Peak/off-peak pricing (peak rates apply during peak hours)', secondPeak: 'Enable second peak period', peakPeriod: 'Peak period {n}', timeHint: 'HH:MM · server local time · overnight ranges e.g. 22:00–06:00', peakInput: 'Peak input', peakOutput: 'Peak output', peakCacheRead: 'Peak cache read', peakCacheWrite: 'Peak cache write', sharedPeak: 'Both peak periods use the same peak rates; blank peak rates use normal rates', normalPeak: 'Blank peak rates use normal rates', saving: 'Saving…', save: 'Save', reset: 'Reset', remove: 'Remove', unit: 'Unit price: {currency} / million tokens · displayed in target currency', adjust: 'Adjust price', configure: 'Configure price', modelPlaceholder: 'Model ID, e.g. deepseek-chat (preset price)', add: 'Add', emptyUsed: 'No model usage yet; send a message to collect usage (uncheck “Show used models only” to view prices)', empty: 'No models; add one using the field below', balanceLoading: 'Querying…', balanceError: 'Query failed', balanceNone: 'Not queried', balanceUpdated: 'Balance updated {time}', balanceQuerying: 'Querying account balance…', balanceHint: 'Click “Query balance” to fetch', errorPrefix: 'Error: {error}', emptyUsed: 'No model calls yet; send a message to collect usage (clear “Show used models only” to view price configuration)', empty: 'No models; add one below', modelPlaceholder: 'Model ID, e.g. deepseek-chat (preset price)', add: 'Add', sharedPeak: 'Both peak periods use the same peak rates; blank peak rates use normal rates', normalPeak: 'Blank peak rates use normal rates', save: 'Save', saving: 'Saving…', reset: 'Reset', remove: 'Remove', unit: 'Unit price: {currency} / million tokens · displayed in target currency', adjust: 'Adjust price', configure: 'Configure price' }
+      const interpolate = (value, params) => String(value).replace(/\{(\w+)\}/g, (_, key) => params && params[key] !== undefined ? params[key] : '{' + key + '}')
+      const fallbackT = (key, params) => interpolate(EN[key] || key, params)
 
       const getStats = () => fetch(API, { cache: 'no-store' }).then((res) => res.json())
       const postAction = (body) => fetch(API, {
@@ -23,6 +29,16 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
         apply(ctx) {
           const slots = ctx.get('slots')
           if (slots === undefined) return
+          const locale = ctx.get('locale')
+          let translate = fallbackT
+          if (locale !== undefined) {
+            ctx.effect(() => {
+              const offZh = locale.register(NS, 'zh', ZH)
+              const offEn = locale.register(NS, 'en', EN)
+              return () => { offZh(); offEn() }
+            }, 'model-usage-plugin: dictionaries')
+            translate = locale.bind(NS)
+          }
 
           const styleEl = document.createElement('style')
           styleEl.textContent = `
@@ -201,7 +217,8 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             return PRESET_PRICES[key] || undefined
           }
 
-          function ModelUsagePage() {
+          function ModelUsagePage(props) {
+            const t = props && typeof props.t === 'function' ? props.t : translate
             const [view, setView] = React.useState(null)
             const [drafts, setDrafts] = React.useState({})
             const [open, setOpen] = React.useState({})
@@ -244,8 +261,8 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
 
             if (view === null) {
               return React.createElement('div', { className: 'mu-page' },
-                React.createElement('div', { className: 'mu-error' }, error ? ('加载失败：' + error) : ''),
-                React.createElement('div', null, error ? '正在自动重试…' : '正在加载模型消耗数据…'))
+                React.createElement('div', { className: 'mu-error' }, error ? t('loadFailed', { error }) : ''),
+                React.createElement('div', null, error ? t('retrying') : t('loading')))
             }
 
             const rows = view.rows || []
@@ -403,14 +420,14 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             const balClass = balance.status === 'ok' ? 'mu-big-value' : (balance.status === 'error' ? 'mu-big-value err' : 'mu-big-value wait')
             const balValue = balance.status === 'ok'
               ? fmtMoney(balance.total) + ' ' + (balance.currency || '')
-              : (balance.status === 'loading' ? '查询中…' : (balance.status === 'error' ? '查询失败' : '未查询'))
+              : (balance.status === 'loading' ? t('balanceLoading') : (balance.status === 'error' ? t('balanceError') : t('balanceNone')))
             const balSub = balance.status === 'ok'
               ? (balance.infos.length > 1
                   ? balance.infos.map((i) => i.currency + ' ' + fmtMoney(i.total)).join(' · ')
-                  : ('余额更新于 ' + (balance.updatedAt ? fmtTs(balance.updatedAt) : '-')))
+                  : t('balanceUpdated', { time: balance.updatedAt ? fmtTs(balance.updatedAt) : '-' }))
               : (balance.status === 'error'
-                  ? (balance.message || '查询失败')
-                  : (balance.status === 'loading' ? '正在查询账户余额…' : '点击"查询余额"获取'))
+                  ? (balance.message || t('balanceError'))
+                  : (balance.status === 'loading' ? t('balanceQuerying') : t('balanceHint')))
 
             const shownModels = onlyUsed ? allModels.filter((m) => rowOf(m)) : allModels
 
@@ -426,44 +443,44 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             const curOptions = CURRENCIES.map((c) => React.createElement('option', { key: c, value: c }, c))
 
             const head = React.createElement('div', { className: 'mu-head' },
-              React.createElement('div', { className: 'mu-title' }, '模型消耗统计'))
+              React.createElement('div', { className: 'mu-title' }, t('title')))
 
             const bigMetrics = React.createElement('div', { className: 'mu-big' },
               React.createElement('div', { className: 'mu-big-card' },
                 React.createElement('div', { className: 'mu-big-value' }, fmt(totalTokens)),
-                React.createElement('div', { className: 'mu-big-label' }, '总 Token')),
+                React.createElement('div', { className: 'mu-big-label' }, t('totalTokens'))),
               React.createElement('div', { className: 'mu-big-card' },
                 React.createElement('div', { className: balClass }, balValue),
-                React.createElement('div', { className: 'mu-big-label' }, '账户余额'),
+                React.createElement('div', { className: 'mu-big-label' }, t('balance')),
                 React.createElement('div', { className: 'mu-big-sub' }, balSub)))
 
             const ratesFresh = view.ratesSource === 'live' && !needsAutoRefreshRates(view)
             const ratesTime = view.ratesFetchedAt ? fmtTs(view.ratesFetchedAt) : null
             const curRow = React.createElement('div', { className: 'mu-cur' },
-              React.createElement('span', { className: 'mu-cur-label' }, '目标货币'),
+              React.createElement('span', { className: 'mu-cur-label' }, t('targetCurrency')),
               React.createElement('select', { className: 'mu-select', value: target, onChange: (e) => setTarget(e.target.value) }, curOptions),
-              React.createElement('span', { className: 'mu-rate' }, '汇率 USD→' + target + ' ' + fmtRate(rateOf(target)) + (ratesTime ? ' · 更新于 ' + ratesTime : '')),
-              React.createElement('span', { className: view.ratesSource === 'live' ? 'mu-badge-live' : 'mu-badge-default' }, view.ratesSource === 'live' ? '实时' : '默认值'),
-              ratesFresh ? React.createElement('span', { className: 'mu-hint' }, '缓存 7 天内，需手动刷新') : null,
-              React.createElement('button', { className: 'mu-btn', disabled: busy === 'rates', onClick: refreshRates }, busy === 'rates' ? '更新中…' : '更新汇率'),
-              React.createElement('button', { className: 'mu-btn', disabled: balBusy, onClick: refreshBalance }, balBusy ? '查询中…' : '查询余额'),
-              React.createElement('button', { className: 'mu-btn', onClick: () => setBconfOpen((v) => !v) }, bconfOpen ? '收起余额配置' : '余额配置'),
+              React.createElement('span', { className: 'mu-rate' }, t('rate', { target, rate: fmtRate(rateOf(target)) }) + (ratesTime ? ' · ' + t('updatedAt', { time: ratesTime }) : '')),
+              React.createElement('span', { className: view.ratesSource === 'live' ? 'mu-badge-live' : 'mu-badge-default' }, view.ratesSource === 'live' ? t('live') : t('defaultRate')),
+              ratesFresh ? React.createElement('span', { className: 'mu-hint' }, t('cacheHint')) : null,
+              React.createElement('button', { className: 'mu-btn', disabled: busy === 'rates', onClick: refreshRates }, busy === 'rates' ? t('refreshing') : t('refreshRates')),
+              React.createElement('button', { className: 'mu-btn', disabled: balBusy, onClick: refreshBalance }, balBusy ? t('querying') : t('queryBalance')),
+              React.createElement('button', { className: 'mu-btn', onClick: () => setBconfOpen((v) => !v) }, bconfOpen ? t('collapseBalanceConfig') : t('balanceConfig')),
               React.createElement('label', { className: 'mu-toggle' },
                 React.createElement('input', { type: 'checkbox', checked: onlyUsed, onChange: (e) => setOnlyUsed(e.target.checked) }),
-                '仅显示已调用模型'))
+                t('onlyUsed')))
 
             const bconf = bconfOpen ? React.createElement('div', { className: 'mu-bconf' },
-              React.createElement('span', { className: 'mu-bconf-label' }, 'API Key（留空则用 DEEPSEEK_API_KEY）'),
+              React.createElement('span', { className: 'mu-bconf-label' }, t('balanceKey')),
               React.createElement('input', { className: 'mu-input', style: { maxWidth: '200px' }, type: 'password', placeholder: 'sk-...', value: bconfApiKey, onChange: (e) => setBconfApiKey(e.target.value) }),
-              React.createElement('span', { className: 'mu-bconf-label' }, '余额接口 Base URL'),
+              React.createElement('span', { className: 'mu-bconf-label' }, t('balanceBaseUrl')),
               React.createElement('input', { className: 'mu-input', style: { maxWidth: '200px' }, placeholder: 'https://api.deepseek.com', value: bconfBaseUrl, onChange: (e) => setBconfBaseUrl(e.target.value) }),
-              React.createElement('button', { className: 'mu-btn', onClick: saveBconf }, '保存并查询')) : null
+              React.createElement('button', { className: 'mu-btn', onClick: saveBconf }, t('saveAndQuery'))) : null
 
             const summary = React.createElement('div', { className: 'mu-summary' },
-              chip('调用', fmt(totalCalls)),
-              chip('tokens', fmt(totalTokens)),
-              chip('费用(' + target + ')', fmtMoney(totalCost)),
-              chip('失败', fmt(totalFailed)))
+              chip(t('calls'), fmt(totalCalls)),
+              chip(t('tokens'), fmt(totalTokens)),
+              chip(t('cost', { target }), fmtMoney(totalCost)),
+              chip(t('failed'), fmt(totalFailed)))
 
             const cards = shownModels.map((model) => {
               const row = rowOf(model)
@@ -472,90 +489,90 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
               const hasPrice = !!priceMap[model]
               const expanded = !!open[model]
               const meta = row
-                ? fmt(row.calls) + ' 次调用' + (row.failed ? ' · 失败 ' + row.failed : '') + ' · 费用 ' + (cost === null ? '-' : fmtMoney(cost) + ' ' + target) + (cost === null && !hasPrice ? '（未配置价格）' : '')
-                : '尚未调用'
+                ? t('callMeta', { calls: fmt(row.calls) }) + (row.failed ? t('failedMeta', { failed: row.failed }) : '') + t('costMeta', { cost: cost === null ? '-' : fmtMoney(cost), target }) + (cost === null && !hasPrice ? t('notConfigured') : '')
+                : t('unused')
               return React.createElement('div', { className: 'mu-card', key: model },
                 React.createElement('div', { className: 'mu-card-head' },
                   React.createElement('div', { className: 'mu-model', title: model }, model),
                   row ? React.createElement('div', { className: 'mu-provider', title: row.providers.join(', ') }, row.providers.join(', ')) : null,
                   React.createElement('div', { className: 'mu-meta' }, meta)),
                 row ? React.createElement('div', { className: 'mu-grid' },
-                  cell('未命中', fmt(row.inputTokens)),
-                  cell('缓存命中', fmt(row.cacheReadTokens)),
-                  cell('缓存写入', fmt(row.cacheWriteTokens)),
-                  cell('输出', fmt(row.outputTokens))) : null,
+                  cell(t('cacheMiss'), fmt(row.inputTokens)),
+                  cell(t('cacheRead'), fmt(row.cacheReadTokens)),
+                  cell(t('cacheWrite'), fmt(row.cacheWriteTokens)),
+                  cell(t('output'), fmt(row.outputTokens))) : null,
                 row && d.peakEnabled && (row.peakInputTokens > 0 || row.peakOutputTokens > 0 || row.peakCacheReadTokens > 0 || row.peakCacheWriteTokens > 0)
                   ? React.createElement('div', { className: 'mu-peak-stats' },
-                      '高峰 tokens：输入 ' + fmt(row.peakInputTokens) + ' · 输出 ' + fmt(row.peakOutputTokens) + ' · 缓存命中 ' + fmt(row.peakCacheReadTokens) + ' · 缓存写入 ' + fmt(row.peakCacheWriteTokens))
+                      t('peakTokens', { input: fmt(row.peakInputTokens), output: fmt(row.peakOutputTokens), read: fmt(row.peakCacheReadTokens), write: fmt(row.peakCacheWriteTokens) }))
                   : null,
                 expanded
                   ? React.createElement('div', { className: 'mu-price' },
                       React.createElement('div', { className: 'mu-price-cur' },
-                        React.createElement('span', { className: 'mu-field-label' }, '计价货币'),
+                        React.createElement('span', { className: 'mu-field-label' }, t('pricingCurrency')),
                         React.createElement('select', { className: 'mu-select', value: d.currency || 'USD', onChange: (e) => setDraft(model, 'currency', e.target.value) }, curOptions)),
                       React.createElement('div', { className: 'mu-price-grid' },
-                        field(model, 'input', '输入', d.input),
-                        field(model, 'output', '输出', d.output),
-                        field(model, 'cacheRead', '缓存命中', d.cacheRead),
-                        field(model, 'cacheWrite', '缓存写入', d.cacheWrite)),
+                        field(model, 'input', t('input'), d.input),
+                        field(model, 'output', t('output'), d.output),
+                        field(model, 'cacheRead', t('cacheRead'), d.cacheRead),
+                        field(model, 'cacheWrite', t('cacheWrite'), d.cacheWrite)),
                       React.createElement('div', { className: 'mu-peak' },
                         React.createElement('div', { className: 'mu-peak-time' },
                           React.createElement('label', { className: 'mu-peak-toggle' },
                             React.createElement('input', { type: 'checkbox', checked: !!d.peakEnabled, onChange: (e) => setDraft(model, 'peakEnabled', e.target.checked) }),
-                            '峰谷定价（高峰期按高峰价，其余按正常价）'),
+                            t('peakPricing')),
                           d.peakEnabled
                             ? React.createElement('label', { className: 'mu-peak-toggle' },
                                 React.createElement('input', { type: 'checkbox', checked: !!d.peak2Enabled, onChange: (e) => setDraft(model, 'peak2Enabled', e.target.checked) }),
-                                '启用第二个高峰时段')
+                                t('secondPeak'))
                             : null),
                         d.peakEnabled
                           ? React.createElement('div', { className: 'mu-peak-body' },
                               React.createElement('div', { className: 'mu-peak-time' },
-                                React.createElement('span', { className: 'mu-field-label' }, '高峰时段 1'),
+                                React.createElement('span', { className: 'mu-field-label' }, t('peakPeriod', { n: 1 })),
                                 React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '09:00', value: d.peakStart || '', onChange: (e) => setDraft(model, 'peakStart', e.target.value) }),
                                 React.createElement('span', null, '—'),
                                 React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '12:00', value: d.peakEnd || '', onChange: (e) => setDraft(model, 'peakEnd', e.target.value) }),
-                                React.createElement('span', { className: 'mu-hint' }, 'HH:MM · 服务器本地时间 · 跨零点如 22:00–06:00')),
+                                React.createElement('span', { className: 'mu-hint' }, t('timeHint'))),
                               d.peak2Enabled
                                 ? React.createElement('div', { className: 'mu-peak-time' },
-                                    React.createElement('span', { className: 'mu-field-label' }, '高峰时段 2'),
+                                    React.createElement('span', { className: 'mu-field-label' }, t('peakPeriod', { n: 2 })),
                                     React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '14:00', value: d.peak2Start || '', onChange: (e) => setDraft(model, 'peak2Start', e.target.value) }),
                                     React.createElement('span', null, '—'),
                                     React.createElement('input', { className: 'mu-input', style: { maxWidth: '64px' }, placeholder: '18:00', value: d.peak2End || '', onChange: (e) => setDraft(model, 'peak2End', e.target.value) }))
                                 : null,
                               React.createElement('div', { className: 'mu-price-grid' },
-                                field(model, 'peakInput', '高峰输入', d.peakInput),
-                                field(model, 'peakOutput', '高峰输出', d.peakOutput),
-                                field(model, 'peakCacheRead', '高峰缓存命中', d.peakCacheRead),
-                                field(model, 'peakCacheWrite', '高峰缓存写入', d.peakCacheWrite)),
-                              React.createElement('div', { className: 'mu-hint' }, d.peak2Enabled ? '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费' : '高峰价留空则按正常价计费'))
+                                field(model, 'peakInput', t('peakInput'), d.peakInput),
+                                field(model, 'peakOutput', t('peakOutput'), d.peakOutput),
+                                field(model, 'peakCacheRead', t('peakCacheRead'), d.peakCacheRead),
+                                field(model, 'peakCacheWrite', t('peakCacheWrite'), d.peakCacheWrite)),
+                              React.createElement('div', { className: 'mu-hint' }, d.peak2Enabled ? t('sharedPeak') : t('normalPeak')))
                           : null),
                       React.createElement('div', { className: 'mu-price-actions' },
-                        React.createElement('button', { className: 'mu-btn', disabled: saving === model, onClick: () => savePrice(model) }, saving === model ? '保存中…' : '保存'),
-                        React.createElement('button', { className: 'mu-btn', disabled: !presetFor(model), onClick: () => resetPrice(model) }, '重置'),
-                        React.createElement('button', { className: 'mu-btn', disabled: !hasPrice, onClick: () => removePrice(model) }, '移除'),
-                        React.createElement('span', { className: 'mu-hint' }, '单价单位：' + (d.currency || 'USD') + ' / 百万 tokens · 展示按目标货币换算')))
-                  : React.createElement('button', { className: 'mu-price-toggle', onClick: () => togglePrice(model) }, (hasPrice ? '调整价格' : '配置价格') + ' ▾'))
+                        React.createElement('button', { className: 'mu-btn', disabled: saving === model, onClick: () => savePrice(model) }, saving === model ? t('saving') : t('save')),
+                        React.createElement('button', { className: 'mu-btn', disabled: !presetFor(model), onClick: () => resetPrice(model) }, t('reset')),
+                        React.createElement('button', { className: 'mu-btn', disabled: !hasPrice, onClick: () => removePrice(model) }, t('remove')),
+                        React.createElement('span', { className: 'mu-hint' }, t('unit', { currency: d.currency || 'USD' }))))
+                  : React.createElement('button', { className: 'mu-price-toggle', onClick: () => togglePrice(model) }, (hasPrice ? t('adjust') : t('configure')) + ' ▾'))
             })
 
             const addRow = React.createElement('div', { className: 'mu-add' },
-              React.createElement('input', { className: 'mu-input', style: { maxWidth: '240px' }, placeholder: '模型 id，如 deepseek-chat（预配置价格）', value: newModel, onChange: (e) => setNewModel(e.target.value) }),
-              React.createElement('button', { className: 'mu-btn', onClick: addModel }, '添加'))
+              React.createElement('input', { className: 'mu-input', style: { maxWidth: '240px' }, placeholder: t('modelPlaceholder'), value: newModel, onChange: (e) => setNewModel(e.target.value) }),
+              React.createElement('button', { className: 'mu-btn', onClick: addModel }, t('add')))
 
             return React.createElement('div', { className: 'mu-page' },
               head,
               bigMetrics,
               curRow,
               bconf,
-              error ? React.createElement('div', { className: 'mu-error' }, '错误：' + error) : null,
+              error ? React.createElement('div', { className: 'mu-error' }, t('errorPrefix', { error })) : null,
               summary,
-              React.createElement('div', { className: 'mu-list' }, cards.length ? cards : React.createElement('div', { className: 'mu-empty' }, onlyUsed ? '暂无模型调用记录，发送消息后自动统计（取消勾选"仅显示已调用模型"可查看价格配置）' : '暂无模型，可通过下方输入框添加')),
+              React.createElement('div', { className: 'mu-list' }, cards.length ? cards : React.createElement('div', { className: 'mu-empty' }, onlyUsed ? t('emptyUsed') : t('empty'))),
               addRow)
           }
 
           slots.inject('settings.section', () => slots.register(
-            { name: 'settings.section', id: 'model-usage', order: 30, label: '模型消耗' },
-            () => React.createElement(ModelUsagePage, null),
+            { name: 'settings.section', id: 'model-usage', order: 30, label: () => translate('title'), locale: NS },
+            (props) => React.createElement(ModelUsagePage, props),
           ))
         },
       }

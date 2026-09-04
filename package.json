@@ -19,9 +19,13 @@
   },
   "files": [
     "src",
+    "tests",
     "cordis.patch.yml",
     "image.png"
   ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
   "keywords": [
     "dsh",
     "deepseek-harness",

@@ -56,6 +56,7 @@ dsh plugin --profile web remove model-usage-plugin
 ## 数据与隐私
 
 - 统计、价格与汇率缓存（含时间戳）保存在 `$DSH_HOME/musage-stats.json`
+- 统计接口只接受 loopback 同源请求；不要将包含该插件的 WebServer 暴露到公网
 - 页面填写的余额 API Key 仅保存在内存，不会写入磁盘；需持久化时请配置 `DEEPSEEK_API_KEY` 环境变量或凭证
 
 ## License
