@@ -775,6 +775,9 @@ check('npm 发布产物完整且最小')
       rmSync(stage, { recursive: true, force: true })
     }
   }
+  // npm 的缓存目录会随着每次校验涨到几百 MB（只在 .verify-home 里，但没理由留着）。
+  // 这一项跑完就删：下次重跑会重建，代价只是一次本地 pack。
+  rmSync(cache, { recursive: true, force: true })
 }
 
 // ---------- 10. 单元测试 ----------
