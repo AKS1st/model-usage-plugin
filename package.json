@@ -1,6 +1,6 @@
 {
   "name": "model-usage-plugin",
-  "version": "0.3.2",
+  "version": "0.16.2",
   "description": "Per-model token usage, cost estimation and DeepSeek account balance for the DeepSeek Harness Web UI.",
   "private": true,
   "type": "module",
@@ -20,11 +20,17 @@
   "files": [
     "src",
     "tests",
+    "scripts",
     "cordis.patch.yml",
-    "image.png"
+    "docs"
   ],
   "scripts": {
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "verify": "node scripts/verify.mjs",
+    "preview": "node scripts/preview.mjs",
+    "preview:shot": "node scripts/preview.mjs --shot",
+    "preview:measure": "node scripts/preview.mjs --measure",
+    "shots:docs": "node scripts/docs-shots.mjs"
   },
   "keywords": [
     "dsh",
