@@ -1,8 +1,7 @@
 {
   "name": "model-usage-plugin",
-  "version": "0.16.2",
-  "description": "Per-model token usage, cost estimation and DeepSeek account balance for the DeepSeek Harness Web UI.",
-  "private": true,
+  "version": "0.16.3",
+  "description": "Per-model token usage, cost estimation and DeepSeek account balance for the DeepSeek Harness Web settings panel.",
   "type": "module",
   "exports": {
     ".": "./src/index.js",
@@ -19,11 +18,11 @@
   },
   "files": [
     "src",
-    "tests",
-    "scripts",
-    "cordis.patch.yml",
-    "docs"
+    "cordis.patch.yml"
   ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
   "scripts": {
     "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "verify": "node scripts/verify.mjs",
@@ -40,11 +39,16 @@
     "tokens",
     "usage",
     "cost",
-    "balance"
+    "balance",
+    "settings-panel"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AKS1st/model-usage-plugin.git"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/AKS1st/model-usage-plugin/issues"
+  },
+  "homepage": "https://github.com/AKS1st/model-usage-plugin#readme"
 }

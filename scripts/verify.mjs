@@ -18,7 +18,7 @@
  * 退出码 0 = 可以重启，非 0 = 不要重启。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -690,9 +690,10 @@ check('真实排版不越界（Chrome 实测）')
       else fail('柱似乎仍被拉伸铺满整行（占 ' + extent + 'px / ' + plot + 'px）')
     }
 
-    // README 里写的是**实测数字**，因此会随布局改动而过期。过期的文档比没有文档更误导：
+    // 文档里写的是**实测数字**，因此会随布局改动而过期。过期的文档比没有文档更误导：
     // 读者会照着一个不存在的界面去理解代码。这里把声称值与重新量出的值对上。
-    const readme = readFileSync(join(PLUGIN_ROOT, 'README.md'), 'utf8')
+    // 注意核对的是 docs/DEVELOPMENT.md：布局类数字属于开发者文档，README 面向使用者。
+    const devDoc = readFileSync(join(PLUGIN_ROOT, 'docs/DEVELOPMENT.md'), 'utf8')
     const measure = (args) => {
       const res = spawnSync(process.execPath, ['scripts/preview.mjs', '--measure', ...args], {
         cwd: PLUGIN_ROOT, encoding: 'utf8', timeout: 180_000,
@@ -700,28 +701,83 @@ check('真实排版不越界（Chrome 实测）')
       const hit = ((res.stdout || '') + (res.stderr || '')).match(/页面总高：(\d+)px/)
       return hit ? Number(hit[1]) : null
     }
-    const overviewClaim = Number((readme.match(/\*\*恒定 (\d+)px\*\*/) || [])[1])
-    const steadyClaim = Number((readme.match(/不随模型数增长\*\*：[^\n]*?\*\*(\d+)px\*\*/) || [])[1])
-    const configClaim = Number((readme.match(/\*\*配置\*\*[^\n]*?(\d+)px\s*\|/) || [])[1])
+    const steadyClaim = Number((devDoc.match(/个模型实测都是 (\d+)px/) || [])[1])
+    const configClaim = Number((devDoc.match(/\*\*配置\*\*[^\n]*?(\d+)px\s*\|/) || [])[1])
     const measuredDefault = sceneHeights[0] && sceneHeights[0].height
     const measuredAt90 = measure(['--models=90'])
     const measuredConfig = measure(['--tab=config'])
     const drift = []
-    if (Number.isFinite(overviewClaim) && measuredDefault !== overviewClaim) {
-      drift.push('总览声称 ' + overviewClaim + 'px，实测 ' + measuredDefault + 'px')
-    }
-    if (Number.isFinite(steadyClaim) && measuredAt90 !== steadyClaim) {
-      drift.push('"90 个模型仍 ' + steadyClaim + 'px" 实测 ' + measuredAt90 + 'px')
+    if (!Number.isFinite(steadyClaim)) {
+      drift.push('文档里找不到"高度恒定"的实测声明（核对锚点丢了）')
+    } else {
+      // 声明的是"不随模型数增长"，所以默认态与 90 模型态都必须等于该值。
+      if (measuredDefault !== steadyClaim) drift.push('总览声称 ' + steadyClaim + 'px，默认态实测 ' + measuredDefault + 'px')
+      if (measuredAt90 !== steadyClaim) drift.push('总览声称 ' + steadyClaim + 'px，90 模型实测 ' + measuredAt90 + 'px')
     }
     if (Number.isFinite(configClaim) && measuredConfig !== configClaim) {
       drift.push('配置页声称 ' + configClaim + 'px，实测 ' + measuredConfig + 'px')
     }
-    if (drift.length > 0) fail('README 的实测数字已过期：' + drift.join('；'))
-    else ok('README 的实测高度与当前代码一致（总览 ' + measuredDefault + 'px · 90 模型 ' + measuredAt90 + 'px · 配置 ' + measuredConfig + 'px）')
+    if (drift.length > 0) fail('文档里的实测数字已过期：' + drift.join('；'))
+    else ok('DEVELOPMENT.md 的实测高度与当前代码一致（默认 ' + measuredDefault + 'px · 90 模型 ' + measuredAt90 + 'px · 配置 ' + measuredConfig + 'px）')
   }
 }
 
-// ---------- 8. 单元测试 ----------
+// ---------- 9. 发布产物 ----------
+
+check('npm 发布产物完整且最小')
+{
+  // 发布出去的东西和本地跑的东西必须是同一份。`files` 是白名单，最容易出的错是
+  // 漏掉运行时真正需要的文件（装上就直接报错），或把测试与脚本一起发出去
+  // （使用者拿到一堆跑不起来、也不需要的东西）。所以既查"该有的在不在"，
+  // 也查"不该有的有没有混进去"，并把真实 tarball 解开导入一次。
+  const cache = join(VERIFY_HOME, 'npm-cache')
+  mkdirSync(cache, { recursive: true })
+  const env = { ...process.env, npm_config_cache: cache }
+  const dry = spawnSync('npm', ['pack', '--dry-run', '--json'], {
+    cwd: PLUGIN_ROOT, encoding: 'utf8', timeout: 240_000, env,
+  })
+  let listed = null
+  try {
+    const parsed = JSON.parse((dry.stdout || '').trim() || '[]')
+    listed = parsed[0] && parsed[0].files ? parsed[0].files.map((file) => file.path) : null
+  } catch { listed = null }
+  if (listed === null) {
+    fail('npm pack --dry-run 无法解析：' + ((dry.stderr || dry.stdout || '').split('\n').slice(-3).join(' | ')))
+  } else {
+    const required = ['src/index.js', 'src/client.js', 'src/route-security.js', 'cordis.patch.yml', 'README.md', 'LICENSE', 'package.json']
+    const missing = required.filter((file) => !listed.includes(file))
+    const forbidden = listed.filter((file) => /^(tests|scripts|docs|\.verify)/.test(file))
+    if (missing.length > 0) fail('发布产物缺少运行时必需文件：' + missing.join(', '))
+    else if (forbidden.length > 0) fail('发布产物混入了开发文件（应在 files 白名单外）：' + forbidden.slice(0, 5).join(', '))
+    else ok('产物含 ' + listed.length + ' 个文件：' + required.join(' / '))
+
+    // 真解包一次并导入 Host 半部：`node --check` 只验语法，导入才验证相对导入与顶层
+    // 求值在**发布形状**下成立（工作区里能跑、发布后装不上，正是这里会漏掉的）。
+    const stage = mkdtempSync(join(tmpdir(), 'musage-pack-'))
+    try {
+      const packed = spawnSync('npm', ['pack', '--pack-destination', stage], {
+        cwd: PLUGIN_ROOT, encoding: 'utf8', timeout: 240_000, env,
+      })
+      const tarball = (readdirSync(stage) || []).find((name) => name.endsWith('.tgz'))
+      if (!tarball) {
+        fail('npm pack 没有产出 tarball：' + ((packed.stderr || '').split('\n').slice(-2).join(' | ')))
+      } else {
+        const untar = spawnSync('tar', ['-xzf', join(stage, tarball), '-C', stage], { encoding: 'utf8' })
+        if (untar.status !== 0) {
+          fail('解包失败：' + (untar.stderr || '').split('\n')[0])
+        } else {
+          const mod = await import(pathToFileURL(join(stage, 'package', 'src/index.js')).href + '?pack-check=1')
+          if (typeof mod.apply !== 'function') fail('解包后的 Host 半部没有导出 apply()')
+          else ok('解包后的产物可导入（' + tarball + '，导出 apply/name/inject）')
+        }
+      }
+    } finally {
+      rmSync(stage, { recursive: true, force: true })
+    }
+  }
+}
+
+// ---------- 10. 单元测试 ----------
 
 check('单元测试')
 {
