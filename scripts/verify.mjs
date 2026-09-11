@@ -751,6 +751,26 @@ check('npm 发布产物完整且最小')
     else if (forbidden.length > 0) fail('发布产物混入了开发文件（应在 files 白名单外）：' + forbidden.slice(0, 5).join(', '))
     else ok('产物含 ' + listed.length + ' 个文件：' + required.join(' / '))
 
+    // README 里引用的图片必须真实存在、且随包发布。
+    // 碎图在纯文本 review 里看不出来（线上就是这么发生的），而且**外链图床**还有一个
+    // 更隐蔽的问题：GitHub 会把外链图片改写走 camo.githubusercontent.com，部分网络下
+    // 长期不通，读者看到的是碎图而作者本地一切正常。所以这里直接禁止外链图片。
+    const readmeText = readFileSync(join(PLUGIN_ROOT, 'README.md'), 'utf8')
+    const imageSources = [...readmeText.matchAll(/!\[[^\]]*\]\(([^)\s]+)[^)]*\)/g)].map((match) => match[1])
+    const external = imageSources.filter((src) => /^[a-z]+:/i.test(src))
+    const relative = imageSources.filter((src) => !/^[a-z]+:/i.test(src))
+    const brokenRefs = relative.filter((src) => !existsSync(join(PLUGIN_ROOT, src)))
+    const unpackedRefs = relative.filter((src) => !listed.includes(src.replace(/^\.\//, '')))
+    if (external.length > 0) {
+      fail('README 用了外部图床（会被改写走 camo，部分网络下加载不出来）：' + external.slice(0, 3).join(', '))
+    } else if (brokenRefs.length > 0) {
+      fail('README 引用了不存在的图片：' + brokenRefs.join(', '))
+    } else if (unpackedRefs.length > 0) {
+      fail('README 引用的图片没有随包发布：' + unpackedRefs.join(', '))
+    } else {
+      ok('README 的 ' + relative.length + ' 张图都是仓库内相对路径且随包发布（无外链图床）')
+    }
+
     // 真解包一次并导入 Host 半部：`node --check` 只验语法，导入才验证相对导入与顶层
     // 求值在**发布形状**下成立（工作区里能跑、发布后装不上，正是这里会漏掉的）。
     const stage = mkdtempSync(join(tmpdir(), 'musage-pack-'))

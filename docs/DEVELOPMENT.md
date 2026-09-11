@@ -185,12 +185,18 @@ npm run preview:measure   # 用浏览器真实排版量出各区块高度、横�
 npm run preview:measure -- --width=420    # 换宽度
 npm run preview:measure -- --tab=models   # 指定子页面
 npm run preview:measure -- --models=40    # 指定模型数量，用于验证总览恒定高度
-npm run shots:docs        # 生成 README 用的 docs/*.png，并清理清单外的陈旧截图
+npm run shots:readme      # 生成 README 用的 assets/*.png，并清理清单外的陈旧截图
 ```
 
 预览用**真实组件**（jsdom 挂载 + 真实数据态），CSS 取自客户端 `apply` 注入的 `<style>`，
 主题令牌内联 harness 的 `design-platform.css`，所以配色与线上一致。它不启动、不重启 dsh web，
 也不写任何真实 profile。
+
+**README 的图片一律用仓库内相对路径**（`assets/*.png`），不允许外链图床：GitHub 会把外链图片
+改写走 `camo.githubusercontent.com`，在部分网络下长期加载不出来，而作者本地一切正常——
+线上就发生过"README 图片全碎"。私有仓库更是只有相对路径可行。发布出去的 README 也要能显示，
+所以 `assets` 在 `files` 白名单里；`verify` 会核对"README 引用的每张图都存在、都没有外链、
+都随包发布"。
 
 产物文件名后缀由**写入、测量、截图三处共用同一个函数**（`suffixOf`）。这里踩过两次同一个坑：
 三处各拼一次后缀，于是测量/截图读到的是上一轮的旧文件——**看起来在验当前代码，其实在验历史

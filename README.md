@@ -2,11 +2,9 @@
 
 DeepSeek Harness（DSH）Web 设置面板插件：统计各模型的 token 消耗与估算费用，展示用量趋势、开发活跃度与 API 账户余额。
 
-![npm](https://img.shields.io/npm/v/model-usage-plugin)
-![license](https://img.shields.io/npm/l/model-usage-plugin)
-![node](https://img.shields.io/node/v/model-usage-plugin)
+`npm` 安装 · MIT License · Node ^22.19 || >=24（与 DSH 一致）
 
-![模型消耗总览页](https://raw.githubusercontent.com/AKS1st/model-usage-plugin/main/docs/overview-light.png)
+![模型消耗总览页](assets/overview-light.png)
 
 ## 它回答什么
 
@@ -73,15 +71,15 @@ dsh web
 
 模型明细（按"提供服务的模型"分组，同一模型的历史 id 合并成一张卡）：
 
-![模型明细](https://raw.githubusercontent.com/AKS1st/model-usage-plugin/main/docs/models-light.png)
+![模型明细](assets/models-light.png)
 
 配置页：
 
-![配置](https://raw.githubusercontent.com/AKS1st/model-usage-plugin/main/docs/config-light.png)
+![配置](assets/config-light.png)
 
 深色主题下同一套设计令牌，配色自动跟随：
 
-![深色总览](https://raw.githubusercontent.com/AKS1st/model-usage-plugin/main/docs/overview-dark.png)
+![深色总览](assets/overview-dark.png)
 
 </details>
 
