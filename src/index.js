@@ -1062,13 +1062,35 @@ export function apply(ctx) {
       // （开关关掉时数值仍然保留，所以这里只看开关，不看数值是否等于当前预设。）
       if (price.customPricing === true) continue
       if (price.presetRev === PRESET_REV) continue
-      if ((price.peak && price.peak.enabled === false) || (price.peak2 && price.peak2.enabled === false)) continue
+      const peakDisabled = (price.peak && price.peak.enabled === false) || (price.peak2 && price.peak2.enabled === false)
+      // **先判断"这是不是插件发的价"**，再看用户有没有动过峰谷开关。
+      // 顺序反过来的话，一份"基础价仍是出厂默认、但用户关掉了峰谷"的条目会被永远跳过：
+      // 线上实测 `gpt-5.6-sol` 就是这样停在旧价（5/30/0.5/6.25，官方已是 4/20/0.4/5）。
+      if (historicalDefaultFor(model, price) !== undefined) {
+        if (peakDisabled) {
+          // 用户明确关掉了峰谷 → 只把单价升级到当前官方值，**不重新打开**他的开关。
+          prices.set(model, {
+            ...price,
+            currency: preset.currency,
+            input: preset.input,
+            output: preset.output,
+            cacheRead: preset.cacheRead,
+            cacheWrite: preset.cacheWrite,
+            presetRev: PRESET_REV,
+          })
+        } else {
+          prices.set(model, copyPreset(preset))
+        }
+        changed++
+        continue
+      }
+      if (peakDisabled) continue
       // 开关开着但没有有效时段（手加模型留下的空窗口）：这种价格从未被计过高峰，
       // 不能算用户自定义的时段，应连同基础价一起按当前口径重来。注意只针对
       // "声明了峰谷但时段为空"，没有峰谷配置的纯单价价格不在此列。
       const hasValidPeak = hasValidPeakWindow(price.peak) || hasValidPeakWindow(price.peak2)
       const peakDeclared = price.peak?.enabled === true || price.peak2?.enabled === true
-      if ((peakDeclared && !hasValidPeak) || historicalDefaultFor(model, price) || windowMatchesShippedPreset(price)) {
+      if ((peakDeclared && !hasValidPeak) || windowMatchesShippedPreset(price)) {
         prices.set(model, copyPreset(preset))
         changed++
         continue

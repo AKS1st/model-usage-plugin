@@ -253,3 +253,31 @@ test('historical price generations never equal the current presets', () => {
     }
   }
 })
+
+test('a shipped default whose peak switch the user turned off still gets the new base price', { concurrency: 1 }, async () => {
+  // 线上实测：`gpt-5.6-sol` 的基础价仍是出厂旧值（5/30/0.5/6.25，官方已是 4/20/0.4/5），
+  // 但它的峰谷开关被关过 —— 旧的判定顺序先看到"峰谷关着"就跳过，于是这条价格永远停在旧值。
+  // 正确行为：基础价是插件发的 → 升级单价；峰谷是用户关的 → 保持关闭，不偷偷打开。
+  const state = {
+    version: 7,
+    targetCurrency: 'USD',
+    stats: {},
+    removed: [],
+    prices: {
+      'gpt-5.6-sol': {
+        currency: 'USD', input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25,
+        peak: { enabled: false, start: '', end: '', timezone: 'UTC', input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        peak2: { enabled: false, start: '', end: '' },
+      },
+    },
+  }
+  const after = await applyWithState(state)
+  const price = after.prices['gpt-5.6-sol']
+  assert.equal(price.input, 4, '基础价应升级到官方值')
+  assert.equal(price.output, 20)
+  assert.equal(price.cacheRead, 0.4)
+  assert.equal(price.cacheWrite, 5)
+  assert.equal(price.presetRev, PRESET_REV, '升级后应带当前版本戳')
+  assert.equal(price.peak.enabled, false, '用户关掉的峰谷开关不得被重新打开')
+  assert.equal(price.peak2.enabled, false, '第二个窗口同样保持关闭')
+})
