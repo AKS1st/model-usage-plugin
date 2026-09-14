@@ -1,6 +1,6 @@
 {
   "name": "model-usage-plugin",
-  "version": "0.16.5",
+  "version": "0.17.0",
   "description": "Per-model token usage, cost estimation and DeepSeek account balance for the DeepSeek Harness Web settings panel.",
   "type": "module",
   "exports": {
