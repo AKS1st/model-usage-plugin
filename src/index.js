@@ -1146,11 +1146,33 @@ export function apply(ctx) {
   }
 
   /**
+   * 该会话的起始日（连次日一起）是否都已经在台账里，因此无需再读它的日志。
+   *
+   * 次日也算进去，是为了不把跨零点、把用量写到次日的会话整段跳过。
+   * 今天一律视为已覆盖——实时台账在管今天，回填从不碰它。
+   * @param {number|undefined} createdAt - 会话头部的创建时间（epoch ms）。
+   * @returns {boolean} 是否可以跳过读取。
+   */
+  function isSessionDayCovered(createdAt) {
+    if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) return false
+    const todayKey = dayKeyOf(new Date())
+    const covered = (time) => {
+      const key = dayKeyOf(new Date(time))
+      if (key === todayKey) return true
+      return heatBuckets.has(key) && dayBuckets.has(key)
+    }
+    const next = new Date(createdAt)
+    next.setDate(next.getDate() + 1)
+    return covered(createdAt) && covered(next.getTime())
+  }
+
+  /**
    * 回填的实际扫描（由 {@link runBackfill} 负责加锁与复位）。
    * @returns {Promise<{state: string, days: number, sessions: number, scanned: number}>} 结果。
    */
   async function scanBackfill(query) {
-    const budgetMs = 30_000
+    const parsedBudget = Number(process.env.DSH_MODEL_USAGE_BACKFILL_BUDGET_MS)
+    const budgetMs = Number.isFinite(parsedBudget) && parsedBudget > 0 ? parsedBudget : 30_000
     const startedAt = Date.now()
     const sessions = await withTimeout(query.listSessions(), LIST_TIMEOUT_MS, 'listSessions')
     // 新的在前：先补最近的日子，用户最容易先看到。
@@ -1159,9 +1181,16 @@ export function apply(ctx) {
     const total = sessions.length
     let scanned = 0
     let filled = 0
+    let skipped = 0
     let complete = true
     for (const record of sessions) {
       if (Date.now() - startedAt > budgetMs) { complete = false; break }
+      // 用**会话头部时间戳**跳过已经补过的日子：读一份日志要解压 + 回放，约 0.27s，
+      // 而 589 个会话里绝大多数属于已知日子。不跳过的话，每轮 30 秒预算都被
+      // 最新那批已知日子吃光，缺失的老日子永远轮不到——线上表现就是
+      // "total 589、scanned 113、days 0、partial"，一轮轮空转。
+      // 按天幂等：这一轮补上的日子，下一轮会被这里瞬间跳过，于是逐轮向更早推进。
+      if (isSessionDayCovered(record.header && record.header.createdAt)) { skipped += 1; continue }
       let snapshot
       try {
         snapshot = await query.readSession(record.header.id)
@@ -1195,7 +1224,7 @@ export function apply(ctx) {
     if (state === 'done') heatBackfilled = true
     backfillRunning = false
     schedulePersist()
-    return { state, days: filled, sessions: scanned, scanned, total }
+    return { state, days: filled, sessions: scanned, scanned, skipped, total }
   }
 
   /**

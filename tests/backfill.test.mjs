@@ -77,7 +77,7 @@ test('aggregateSessionEvents ignores events without usage', () => {
  *   `immediate`：apply 时已可用；`late`：apply 后才可用（**线上就是这个情况**）；
  *   `absent`：始终没有该服务。
  */
-async function startWithHistory(initial, sessions, injectMode = 'immediate', listSessionsHook = null) {
+async function startWithHistory(initial, sessions, injectMode = 'immediate', listSessionsHook = null, readDelayMs = 0) {
   mkdirSync(TEMP_ROOT, { recursive: true })
   const home = mkdtempSync(join(TEMP_ROOT, 'backfill-'))
   if (initial !== undefined) writeFileSync(join(home, 'musage-stats.json'), JSON.stringify(initial))
@@ -94,6 +94,8 @@ async function startWithHistory(initial, sessions, injectMode = 'immediate', lis
     },
     async readSession(id) {
       state.readCalls.push(id)
+      // 读取是回填里最慢的一步（线上一次约 0.27s，要解压 + 回放整份日志）。
+      if (readDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, readDelayMs))
       const found = sessions.find((s) => s.id === id)
       return { session: { id }, inheritedEventCount: found.inheritedEventCount || 0, events: found.events }
     },
@@ -499,5 +501,48 @@ test('the backfill resolves sessionQuery at call time instead of trusting the in
     if (previousHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previousHome
     rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('backfill advances to older days across attempts instead of re-reading the newest', { concurrency: 1 }, async () => {
+  // 线上根因：语料 589 个会话 / 24 天，账里只有 7 天；扫描最新优先，每轮 30 秒预算都被
+  // 最新那批"已知日子"的会话吃光，缺失的老日子永远轮不到（total 589 / scanned 113 /
+  // days 0 / partial，一轮轮空转）。修法是用会话头部时间戳跳过已知日子，于是每轮都向
+  // 更早推进。这里用读取延迟 + 小预算强制截断：第一轮只能补上最近的几天，
+  // 后续轮次必须跳过它们并继续补更早的日子。
+  const previousBudget = process.env.DSH_MODEL_USAGE_BACKFILL_BUDGET_MS
+  process.env.DSH_MODEL_USAGE_BACKFILL_BUDGET_MS = '100'
+  const days = [1, 2, 3, 4, 5]
+  const history = days.map((daysAgo) => ({
+    id: 's' + daysAgo,
+    createdAt: noonOf(daysAgo),
+    events: [
+      { type: 'request/context', time: noonOf(daysAgo), data: { model: 'm' } },
+      { type: 'assistant/message', time: noonOf(daysAgo), data: { usage: { inputTokens: 10 * daysAgo, outputTokens: 1 } } },
+    ],
+  }))
+  // 每次读取 60ms、预算 100ms：一轮读不完五个会话（必然 partial）。
+  const plugin = await startWithHistory(undefined, history, 'immediate', null, 60)
+  try {
+    const first = plugin.snapshot()
+    assert.equal(first.backfill.state, 'partial', '预算应被截断（实际 ' + first.backfill.state + '）')
+    assert.ok(first.heatSeries.length > 0 && first.heatSeries.length < days.length,
+      '第一轮只应补上部分日子（实际 ' + first.heatSeries.length + '）')
+    // 反复驱动重试：已知日子被跳过，逐轮向更早推进，直到全部补齐。
+    for (let round = 0; round < 4; round += 1) {
+      for (const fn of plugin.state.intervalFns.splice(0)) fn()
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      if (plugin.snapshot().backfill.state === 'done') break
+    }
+    const after = plugin.snapshot()
+    for (const daysAgo of days) {
+      assert.ok(after.heatSeries.some((entry) => entry.d === dayKey(noonOf(daysAgo))),
+        daysAgo + ' 天前那天最终应被补上（说明能跨轮推进）')
+    }
+    assert.ok((after.backfill.skipped || 0) > 0, '后续轮次应跳过已覆盖的日子（实际 ' + after.backfill.skipped + '）')
+  } finally {
+    if (previousBudget === undefined) delete process.env.DSH_MODEL_USAGE_BACKFILL_BUDGET_MS
+    else process.env.DSH_MODEL_USAGE_BACKFILL_BUDGET_MS = previousBudget
+    await plugin.stop()
   }
 })
