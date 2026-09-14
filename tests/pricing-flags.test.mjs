@@ -188,3 +188,63 @@ test('the official price refresh is reflected in the built-in presets', { concur
     await plugin.stop()
   }
 })
+
+test('pinning a pricing provider keeps the numbers untouched', { concurrency: 1 }, async () => {
+  // 同名不同源（glm-5.1 在阿里云 vs Z.AI 单价不同）靠"计价来源"区分：
+  // 固定来源同样只发这一个字段，不能碰任何单价。
+  const plugin = await bench({ version: 7, stats: {}, removed: [], prices: { ...USER_PRICE } })
+  try {
+    await plugin.post({ action: 'set-price', model: 'gpt-5.6-luna', provider: 'openrouter' })
+    const pinned = plugin.read().prices['gpt-5.6-luna']
+    assert.equal(pinned.provider, 'openrouter', '应记住固定的 provider')
+    assert.equal(pinned.input, 9.5, '固定来源不得改动单价')
+    // 传空串即恢复自动判定。
+    await plugin.post({ action: 'set-price', model: 'gpt-5.6-luna', provider: '' })
+    assert.equal(plugin.read().prices['gpt-5.6-luna'].provider, undefined, '空串应恢复自动')
+    assert.equal(plugin.read().prices['gpt-5.6-luna'].input, 9.5, '恢复自动也不得改动单价')
+  } finally {
+    await plugin.stop()
+  }
+})
+
+test('a provider override price is stored per provider and leaves the base price alone', { concurrency: 1 }, async () => {
+  const plugin = await bench({ version: 7, stats: {}, removed: [], prices: { ...USER_PRICE } })
+  try {
+    await plugin.post({
+      action: 'set-price', model: 'gpt-5.6-luna',
+      price: { providerId: 'openrouter', currency: 'USD', input: 1.23, output: 4.56, cacheRead: 0.1, cacheWrite: 0 },
+    })
+    const price = plugin.read().prices['gpt-5.6-luna']
+    assert.ok(price.providers && price.providers.openrouter, '应写入 providers 覆盖')
+    assert.equal(price.providers.openrouter.input, 1.23, '覆盖价应写进该 provider')
+    assert.equal(price.input, 9.5, '基础价必须保持不变')
+    const saved = await plugin.stop()
+    assert.equal(saved.prices['gpt-5.6-luna'].providers.openrouter.output, 4.56, '覆盖价要落盘')
+  } finally {
+    // stop 已在上面调用
+  }
+})
+
+test('an explicit token plan opt-out survives a restart', { concurrency: 1 }, async () => {
+  // tokenPlan 是三态：缺省跟随 provider 的自动规则（订阅型默认算套餐），
+  // 但用户明确说"不"时必须一直算数，否则重启后又会被自动打开。
+  const plugin = await bench({ version: 7, stats: {}, removed: [], prices: { ...USER_PRICE } })
+  try {
+    await plugin.post({ action: 'set-price', model: 'gpt-5.6-luna', tokenPlan: false })
+    const saved = await plugin.stop()
+    assert.equal(saved.prices['gpt-5.6-luna'].tokenPlan, false, 'false 必须落盘（不能当成缺省丢掉）')
+  } finally {
+    // stop 已调用
+  }
+})
+
+test('the snapshot ships the subscription provider list', { concurrency: 1 }, async () => {
+  const plugin = await bench(undefined)
+  try {
+    const list = plugin.read().subscriptionProviders
+    assert.ok(Array.isArray(list), '应下发订阅型 provider 名单')
+    assert.ok(list.includes('openai-codex'), 'Codex 订阅应在名单里：' + JSON.stringify(list))
+  } finally {
+    await plugin.stop()
+  }
+})

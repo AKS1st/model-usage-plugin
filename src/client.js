@@ -16,8 +16,8 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
       const API = '/__musage-stats'
       const NS = 'model-usage-plugin'
       const ZH = {
-        title: '模型消耗统计', totalTokens: '总 Token', cacheMiss: '未命中', heatBackfilled: '已回填 {days} 天历史', customPricing: '自定义计费', customPricingOn: '使用你填写的单价与峰谷规则', customPricingOff: '当前为内置默认计费（你填过的价已保留，勾选即可启用）', tokenPlan: 'Token Plan（套餐）', tokenPlanHint: '套餐覆盖用量：只记录 token，不计算费用', tokenPlanPricing: '套餐 · 仅记录 token', mergedFrom: '由同一模型服务，合并了这些 id：{ids}', mergedIds: '合并 {n} 个 id', versionHint: '当前运行中的插件版本', heatEmpty: '从本版本开始累积，有调用后逐日填充', heatTitle: '开发活跃度', heatLess: '少', heatMore: '多', heatActiveDays: '活跃 {days} 天', heatTotal: '合计 {value}', latest: '最新', byTools: '工具', effToolCalls: '工具调用', effFailRate: '失败率', effPerCall: '每调用均价', effTokensPerCall: '每调用 Token', effTopTools: '高频工具', tabOverview: '总览', tabModels: '模型明细', tabConfig: '配置', openModels: '查看全部模型明细', advanced: '配置', shareTitle: '花费去向', expandHint: '点击展开 token 明细与价格配置', totalCost: '本期花费', shareCost: '花费去向（按费用）', shareTokens: '用量占比（按 Token）', advanced: '汇率、余额与价格配置', andMore: '另有 {n} 个模型未显示', cacheHitValue: '缓存命中 {pct}%', cacheHitShort: '命中 {pct}%', cacheHintNone: '缓存命中 —', callsShort: '{calls} 次调用', failedShort: '失败 {failed}', noUsage: '尚未调用', trendTitle: '用量趋势',trendEmpty: '还没有时间维数据。时间台账从本版本开始记录，发几条消息后这里会出现趋势。',byDay: '按天',byHour: '按小时',byTokens: 'Tokens',byCost: '费用',axisMax: '峰值 {value}',other: '其他',cacheHit: '缓存命中',composeTitle: '按模型的 Token 占比', balance: '账户余额', loading: '正在加载模型消耗数据…', retrying: '正在自动重试…', loadFailed: '加载失败：{error}', targetCurrency: '目标货币', rate: '汇率 USD→{target} {rate}', updatedAt: '更新于 {time}', live: '实时', defaultRate: '默认值', cacheHint: '缓存 7 天内，需手动刷新', refreshRates: '更新汇率', refreshing: '更新中…', queryBalance: '查询余额', querying: '查询中…', balanceConfig: '余额配置', collapseBalanceConfig: '收起余额配置', onlyUsed: '仅显示已调用模型', balanceKey: 'API Key（留空则用 DEEPSEEK_API_KEY）', balanceBaseUrl: '余额接口 Base URL', saveAndQuery: '保存并查询', error: '错误：{error}', calls: '调用', tokens: 'tokens', cost: '费用({target})', failed: '失败', callMeta: '{calls} 次调用', failedMeta: ' · 失败 {failed}', costMeta: ' · 费用 {cost} {target}', notConfigured: '（未配置价格）', unused: '尚未调用', peakTokens: '高峰 tokens：输入 {input} · 输出 {output} · 缓存命中 {read} · 缓存写入 {write}', pricingCurrency: '计价货币', input: '输入', output: '输出', cacheRead: '缓存命中', cacheWrite: '缓存写入', peakPricing: '峰谷定价（高峰期按高峰价，其余按正常价）', secondPeak: '启用第二个高峰时段', peakPeriod: '高峰时段 {n}', timeHint: 'HH:MM · 按所选时区解释（DeepSeek 官方高峰窗口为 UTC）· 跨零点如 22:00–06:00', weekdaysOnly: '仅周一至周五', peakInput: '高峰输入', peakOutput: '高峰输出', peakCacheRead: '高峰缓存命中', peakCacheWrite: '高峰缓存写入', sharedPeak: '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费', normalPeak: '高峰价留空则按正常价计费', saving: '保存中…', save: '保存', reset: '重置', remove: '移除', unit: '单价单位：{currency} / 百万 tokens · 展示按目标货币换算', adjust: '调整价格', configure: '配置价格', modelPlaceholder: '模型 id，如 deepseek-chat（预配置价格）', add: '添加', emptyUsed: '暂无模型调用记录，发送消息后自动统计（取消勾选“仅显示已调用模型”可查看价格配置）', empty: '暂无模型，可通过下方输入框添加', balanceLoading: '查询中…', balanceError: '查询失败', balanceNone: '未查询', balanceUpdated: '余额更新于 {time}', balanceQuerying: '正在查询账户余额…', balanceHint: '点击“查询余额”获取', errorPrefix: '错误：{error}', emptyUsed: '暂无模型调用记录，发送消息后自动统计（取消勾选“仅显示已调用模型”可查看价格配置）', empty: '暂无模型，可通过下方输入框添加', modelPlaceholder: '模型 id，如 deepseek-chat（预配置价格）', add: '添加', sharedPeak: '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费', normalPeak: '高峰价留空则按正常价计费', save: '保存', saving: '保存中…', reset: '重置', remove: '移除', unit: '单价单位：{currency} / 百万 tokens · 展示按目标货币换算', adjust: '调整价格', configure: '配置价格' }
-      const EN = { title: 'Model usage statistics', cacheMiss: 'Uncached', heatBackfilled: '{days} days backfilled', customPricing: 'Custom pricing', customPricingOn: 'Using the rates and peak rules you entered', customPricingOff: 'Built-in default pricing (your own values are kept — tick to use them)', tokenPlan: 'Token plan', tokenPlanHint: 'Covered by a token plan: tokens are recorded, no cost is calculated', tokenPlanPricing: 'Token plan · tokens only', mergedFrom: 'Served by one model; merged ids: {ids}', mergedIds: '{n} merged ids', versionHint: 'Version of the plugin currently running', heatEmpty: 'Accumulating from this version — fills in as you work', heatTitle: 'Activity heatmap', heatLess: 'Less', heatMore: 'More', heatActiveDays: '{days} active days', heatTotal: 'total {value}', latest: 'latest', byTools: 'Tools', effToolCalls: 'Tool calls', effFailRate: 'Failure rate', effPerCall: 'Cost / call', effTokensPerCall: 'Tokens / call', effTopTools: 'Top tools', tabOverview: 'Overview', tabModels: 'Models', tabConfig: 'Settings', openModels: 'Open full model list', advanced: 'Settings', shareTitle: 'Where the money goes', expandHint: 'Click for token details and pricing', totalCost: 'Period cost', shareCost: 'Where the money goes (by cost)', shareTokens: 'Usage share (by tokens)', advanced: 'Rates, balance and pricing', andMore: '{n} more models not shown', cacheHitValue: 'Cache hit {pct}%', cacheHitShort: 'hit {pct}%', cacheHintNone: 'Cache hit —', callsShort: '{calls} calls', failedShort: '{failed} failed', noUsage: 'Not called yet', trendTitle: 'Usage trend',trendEmpty: 'No time-series data yet. The ledger starts recording from this version; send a few messages and the trend appears here.',byDay: 'Daily',byHour: 'Hourly',byTokens: 'Tokens',byCost: 'Cost',axisMax: 'peak {value}',other: 'Other',cacheHit: 'Cache hit',composeTitle: 'Token share by model', totalTokens:'Total tokens', balance: 'Account balance', loading: 'Loading model usage data…', retrying: 'Retrying automatically…', loadFailed: 'Load failed: {error}', targetCurrency: 'Target currency', rate: 'USD→{target} rate {rate}', updatedAt: 'Updated {time}', live: 'Live', defaultRate: 'Default', cacheHint: 'Cached for 7 days; refresh manually', refreshRates: 'Refresh rates', refreshing: 'Refreshing…', queryBalance: 'Query balance', querying: 'Querying…', balanceConfig: 'Balance settings', collapseBalanceConfig: 'Hide balance settings', onlyUsed: 'Show used models only', balanceKey: 'API key (leave blank to use DEEPSEEK_API_KEY)', balanceBaseUrl: 'Balance API base URL', saveAndQuery: 'Save and query', error: 'Error: {error}', calls: 'Calls', tokens: 'Tokens', cost: 'Cost ({target})', failed: 'Failed', callMeta: '{calls} calls', failedMeta: ' · {failed} failed', costMeta: ' · Cost {cost} {target}', notConfigured: ' (price not configured)', unused: 'Not called yet', peakTokens: 'Peak tokens: input {input} · output {output} · cache read {read} · cache write {write}', pricingCurrency: 'Pricing currency', input: 'Input', output: 'Output', cacheRead: 'Cache read', cacheWrite: 'Cache write', peakPricing: 'Peak/off-peak pricing (peak rates apply during peak hours)', secondPeak: 'Enable second peak period', peakPeriod: 'Peak period {n}', timeHint: 'HH:MM · interpreted in the selected time zone (DeepSeek peak windows are UTC) · overnight ranges e.g. 22:00–06:00', weekdaysOnly: 'Weekdays only', peakInput: 'Peak input', peakOutput: 'Peak output', peakCacheRead: 'Peak cache read', peakCacheWrite: 'Peak cache write', sharedPeak: 'Both peak periods use the same peak rates; blank peak rates use normal rates', normalPeak: 'Blank peak rates use normal rates', saving: 'Saving…', save: 'Save', reset: 'Reset', remove: 'Remove', unit: 'Unit price: {currency} / million tokens · displayed in target currency', adjust: 'Adjust price', configure: 'Configure price', modelPlaceholder: 'Model ID, e.g. deepseek-chat (preset price)', add: 'Add', emptyUsed: 'No model usage yet; send a message to collect usage (uncheck “Show used models only” to view prices)', empty: 'No models; add one using the field below', balanceLoading: 'Querying…', balanceError: 'Query failed', balanceNone: 'Not queried', balanceUpdated: 'Balance updated {time}', balanceQuerying: 'Querying account balance…', balanceHint: 'Click “Query balance” to fetch', errorPrefix: 'Error: {error}', emptyUsed: 'No model calls yet; send a message to collect usage (clear “Show used models only” to view price configuration)', empty: 'No models; add one below', modelPlaceholder: 'Model ID, e.g. deepseek-chat (preset price)', add: 'Add', sharedPeak: 'Both peak periods use the same peak rates; blank peak rates use normal rates', normalPeak: 'Blank peak rates use normal rates', save: 'Save', saving: 'Saving…', reset: 'Reset', remove: 'Remove', unit: 'Unit price: {currency} / million tokens · displayed in target currency', adjust: 'Adjust price', configure: 'Configure price' }
+        title: '模型消耗统计', totalTokens: '总 Token', cacheMiss: '未命中', heatBackfilled: '已回填 {days} 天历史', customPricing: '自定义计费', pricingProvider: '计价来源', providerAuto: '自动（内置默认价）', providerSubscription: '订阅', providerMixed: '该模型来自多个 provider，未指定时按基础价计费', customPricingOn: '使用你填写的单价与峰谷规则', customPricingOff: '当前为内置默认计费（你填过的价已保留，勾选即可启用）', tokenPlan: 'Token Plan（套餐）', tokenPlanHint: '套餐覆盖用量：只记录 token，不计算费用', tokenPlanPricing: '套餐 · 仅记录 token', mergedFrom: '由同一模型服务，合并了这些 id：{ids}', mergedIds: '合并 {n} 个 id', versionHint: '当前运行中的插件版本', heatEmpty: '从本版本开始累积，有调用后逐日填充', heatTitle: '开发活跃度', heatLess: '少', heatMore: '多', heatActiveDays: '活跃 {days} 天', heatTotal: '合计 {value}', latest: '最新', byTools: '工具', effToolCalls: '工具调用', effFailRate: '失败率', effPerCall: '每调用均价', effTokensPerCall: '每调用 Token', effTopTools: '高频工具', tabOverview: '总览', tabModels: '模型明细', tabConfig: '配置', openModels: '查看全部模型明细', advanced: '配置', shareTitle: '花费去向', expandHint: '点击展开 token 明细与价格配置', totalCost: '本期花费', shareCost: '花费去向（按费用）', shareTokens: '用量占比（按 Token）', advanced: '汇率、余额与价格配置', andMore: '另有 {n} 个模型未显示', cacheHitValue: '缓存命中 {pct}%', cacheHitShort: '命中 {pct}%', cacheHintNone: '缓存命中 —', callsShort: '{calls} 次调用', failedShort: '失败 {failed}', noUsage: '尚未调用', trendTitle: '用量趋势',trendEmpty: '还没有时间维数据。时间台账从本版本开始记录，发几条消息后这里会出现趋势。',byDay: '按天',byHour: '按小时',byTokens: 'Tokens',byCost: '费用',axisMax: '峰值 {value}',other: '其他',cacheHit: '缓存命中',composeTitle: '按模型的 Token 占比', balance: '账户余额', loading: '正在加载模型消耗数据…', retrying: '正在自动重试…', loadFailed: '加载失败：{error}', targetCurrency: '目标货币', rate: '汇率 USD→{target} {rate}', updatedAt: '更新于 {time}', live: '实时', defaultRate: '默认值', cacheHint: '缓存 7 天内，需手动刷新', refreshRates: '更新汇率', refreshing: '更新中…', queryBalance: '查询余额', querying: '查询中…', balanceConfig: '余额配置', collapseBalanceConfig: '收起余额配置', onlyUsed: '仅显示已调用模型', balanceKey: 'API Key（留空则用 DEEPSEEK_API_KEY）', balanceBaseUrl: '余额接口 Base URL', saveAndQuery: '保存并查询', error: '错误：{error}', calls: '调用', tokens: 'tokens', cost: '费用({target})', failed: '失败', callMeta: '{calls} 次调用', failedMeta: ' · 失败 {failed}', costMeta: ' · 费用 {cost} {target}', notConfigured: '（未配置价格）', unused: '尚未调用', peakTokens: '高峰 tokens：输入 {input} · 输出 {output} · 缓存命中 {read} · 缓存写入 {write}', pricingCurrency: '计价货币', input: '输入', output: '输出', cacheRead: '缓存命中', cacheWrite: '缓存写入', peakPricing: '峰谷定价（高峰期按高峰价，其余按正常价）', secondPeak: '启用第二个高峰时段', peakPeriod: '高峰时段 {n}', timeHint: 'HH:MM · 按所选时区解释（DeepSeek 官方高峰窗口为 UTC）· 跨零点如 22:00–06:00', weekdaysOnly: '仅周一至周五', peakInput: '高峰输入', peakOutput: '高峰输出', peakCacheRead: '高峰缓存命中', peakCacheWrite: '高峰缓存写入', sharedPeak: '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费', normalPeak: '高峰价留空则按正常价计费', saving: '保存中…', save: '保存', reset: '重置', remove: '移除', unit: '单价单位：{currency} / 百万 tokens · 展示按目标货币换算', adjust: '调整价格', configure: '配置价格', modelPlaceholder: '模型 id，如 deepseek-chat（预配置价格）', add: '添加', emptyUsed: '暂无模型调用记录，发送消息后自动统计（取消勾选“仅显示已调用模型”可查看价格配置）', empty: '暂无模型，可通过下方输入框添加', balanceLoading: '查询中…', balanceError: '查询失败', balanceNone: '未查询', balanceUpdated: '余额更新于 {time}', balanceQuerying: '正在查询账户余额…', balanceHint: '点击“查询余额”获取', errorPrefix: '错误：{error}', emptyUsed: '暂无模型调用记录，发送消息后自动统计（取消勾选“仅显示已调用模型”可查看价格配置）', empty: '暂无模型，可通过下方输入框添加', modelPlaceholder: '模型 id，如 deepseek-chat（预配置价格）', add: '添加', sharedPeak: '两个高峰时段共用同一组高峰价；高峰价留空则按正常价计费', normalPeak: '高峰价留空则按正常价计费', save: '保存', saving: '保存中…', reset: '重置', remove: '移除', unit: '单价单位：{currency} / 百万 tokens · 展示按目标货币换算', adjust: '调整价格', configure: '配置价格' }
+      const EN = { title: 'Model usage statistics', cacheMiss: 'Uncached', heatBackfilled: '{days} days backfilled', customPricing: 'Custom pricing', pricingProvider: 'Priced by', providerAuto: 'Auto (built-in default)', providerSubscription: 'subscription', providerMixed: 'This model comes from several providers; without a choice the base price applies', customPricingOn: 'Using the rates and peak rules you entered', customPricingOff: 'Built-in default pricing (your own values are kept — tick to use them)', tokenPlan: 'Token plan', tokenPlanHint: 'Covered by a token plan: tokens are recorded, no cost is calculated', tokenPlanPricing: 'Token plan · tokens only', mergedFrom: 'Served by one model; merged ids: {ids}', mergedIds: '{n} merged ids', versionHint: 'Version of the plugin currently running', heatEmpty: 'Accumulating from this version — fills in as you work', heatTitle: 'Activity heatmap', heatLess: 'Less', heatMore: 'More', heatActiveDays: '{days} active days', heatTotal: 'total {value}', latest: 'latest', byTools: 'Tools', effToolCalls: 'Tool calls', effFailRate: 'Failure rate', effPerCall: 'Cost / call', effTokensPerCall: 'Tokens / call', effTopTools: 'Top tools', tabOverview: 'Overview', tabModels: 'Models', tabConfig: 'Settings', openModels: 'Open full model list', advanced: 'Settings', shareTitle: 'Where the money goes', expandHint: 'Click for token details and pricing', totalCost: 'Period cost', shareCost: 'Where the money goes (by cost)', shareTokens: 'Usage share (by tokens)', advanced: 'Rates, balance and pricing', andMore: '{n} more models not shown', cacheHitValue: 'Cache hit {pct}%', cacheHitShort: 'hit {pct}%', cacheHintNone: 'Cache hit —', callsShort: '{calls} calls', failedShort: '{failed} failed', noUsage: 'Not called yet', trendTitle: 'Usage trend',trendEmpty: 'No time-series data yet. The ledger starts recording from this version; send a few messages and the trend appears here.',byDay: 'Daily',byHour: 'Hourly',byTokens: 'Tokens',byCost: 'Cost',axisMax: 'peak {value}',other: 'Other',cacheHit: 'Cache hit',composeTitle: 'Token share by model', totalTokens:'Total tokens', balance: 'Account balance', loading: 'Loading model usage data…', retrying: 'Retrying automatically…', loadFailed: 'Load failed: {error}', targetCurrency: 'Target currency', rate: 'USD→{target} rate {rate}', updatedAt: 'Updated {time}', live: 'Live', defaultRate: 'Default', cacheHint: 'Cached for 7 days; refresh manually', refreshRates: 'Refresh rates', refreshing: 'Refreshing…', queryBalance: 'Query balance', querying: 'Querying…', balanceConfig: 'Balance settings', collapseBalanceConfig: 'Hide balance settings', onlyUsed: 'Show used models only', balanceKey: 'API key (leave blank to use DEEPSEEK_API_KEY)', balanceBaseUrl: 'Balance API base URL', saveAndQuery: 'Save and query', error: 'Error: {error}', calls: 'Calls', tokens: 'Tokens', cost: 'Cost ({target})', failed: 'Failed', callMeta: '{calls} calls', failedMeta: ' · {failed} failed', costMeta: ' · Cost {cost} {target}', notConfigured: ' (price not configured)', unused: 'Not called yet', peakTokens: 'Peak tokens: input {input} · output {output} · cache read {read} · cache write {write}', pricingCurrency: 'Pricing currency', input: 'Input', output: 'Output', cacheRead: 'Cache read', cacheWrite: 'Cache write', peakPricing: 'Peak/off-peak pricing (peak rates apply during peak hours)', secondPeak: 'Enable second peak period', peakPeriod: 'Peak period {n}', timeHint: 'HH:MM · interpreted in the selected time zone (DeepSeek peak windows are UTC) · overnight ranges e.g. 22:00–06:00', weekdaysOnly: 'Weekdays only', peakInput: 'Peak input', peakOutput: 'Peak output', peakCacheRead: 'Peak cache read', peakCacheWrite: 'Peak cache write', sharedPeak: 'Both peak periods use the same peak rates; blank peak rates use normal rates', normalPeak: 'Blank peak rates use normal rates', saving: 'Saving…', save: 'Save', reset: 'Reset', remove: 'Remove', unit: 'Unit price: {currency} / million tokens · displayed in target currency', adjust: 'Adjust price', configure: 'Configure price', modelPlaceholder: 'Model ID, e.g. deepseek-chat (preset price)', add: 'Add', emptyUsed: 'No model usage yet; send a message to collect usage (uncheck “Show used models only” to view prices)', empty: 'No models; add one using the field below', balanceLoading: 'Querying…', balanceError: 'Query failed', balanceNone: 'Not queried', balanceUpdated: 'Balance updated {time}', balanceQuerying: 'Querying account balance…', balanceHint: 'Click “Query balance” to fetch', errorPrefix: 'Error: {error}', emptyUsed: 'No model calls yet; send a message to collect usage (clear “Show used models only” to view price configuration)', empty: 'No models; add one below', modelPlaceholder: 'Model ID, e.g. deepseek-chat (preset price)', add: 'Add', sharedPeak: 'Both peak periods use the same peak rates; blank peak rates use normal rates', normalPeak: 'Blank peak rates use normal rates', save: 'Save', saving: 'Saving…', reset: 'Reset', remove: 'Remove', unit: 'Unit price: {currency} / million tokens · displayed in target currency', adjust: 'Adjust price', configure: 'Configure price' }
       const interpolate = (value, params) => String(value).replace(/\{(\w+)\}/g, (_, key) => params && params[key] !== undefined ? params[key] : '{' + key + '}')
       const fallbackT = (key, params) => interpolate(EN[key] || key, params)
 
@@ -959,11 +959,46 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
               const row = rowOf(model)
               return presetMap[model] || (row && presetMap[row.modelKey]) || presetMap[normalizeModelId(model)]
             }
-            /** 该模型是否勾了 token plan（套餐覆盖 → 只记 token 不计费）。 */
-            const tokenPlanOf = (model) => {
-              const stored = storedPriceOf(model)
-              return stored !== undefined && stored.tokenPlan === true
+            const subscriptionProviders = new Set(view.subscriptionProviders || [])
+            /** 该模型观测到的 provider（来自统计行）。 */
+            const providersOf = (model) => {
+              const row = mergedRowOf(model) || rowFor(model)
+              return row && Array.isArray(row.providers) ? row.providers : []
             }
+            /**
+             * 该模型的**计价来源**：用户固定优先；否则单来源时就用它；多来源又没固定时留空
+             * （用基础价，并在界面上标注出来）。
+             */
+            const pricingProviderOf = (model) => {
+              const stored = storedPriceOf(model)
+              if (stored !== undefined && typeof stored.provider === 'string' && stored.provider !== '') return stored.provider
+              const list = providersOf(model)
+              return list.length === 1 ? list[0] : undefined
+            }
+            /** 该 provider 是否是订阅型（用量由订阅覆盖 → 默认按套餐处理）。 */
+            const isSubscriptionProvider = (id) => id !== undefined && subscriptionProviders.has(id)
+            /** 该模型在所选 provider 上的覆盖价（用户显式填过才有）。 */
+            const providerOverrideOf = (model) => {
+              const stored = storedPriceOf(model)
+              const provider = pricingProviderOf(model)
+              if (stored === undefined || provider === undefined || stored.providers === undefined) return undefined
+              return stored.providers[provider]
+            }
+            /**
+             * token plan 是否**生效**。
+             *
+             * 三态：用户明确勾选 → 生效；用户明确取消 → 不生效（即使来自订阅型 provider，
+             * 也要按量估算，例如你想看"如果走 API 会花多少"）；没表过态 → 跟随 provider：
+             * 订阅型 provider 的用量本来就不按量计费，默认只记 token。
+             */
+            const tokenPlanActiveOf = (model) => {
+              const stored = storedPriceOf(model)
+              if (stored !== undefined && stored.tokenPlan === true) return true
+              if (stored !== undefined && stored.tokenPlan === false) return false
+              return isSubscriptionProvider(pricingProviderOf(model))
+            }
+            /** 该模型是否勾了 token plan（界面勾选态用生效值）。 */
+            const tokenPlanOf = (model) => tokenPlanActiveOf(model)
             /** 该模型是否勾了「自定义计费」（关着就用内置默认价）。 */
             const customPricingOf = (model) => {
               const stored = storedPriceOf(model)
@@ -972,7 +1007,10 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
             /** 该模型是否**支持** token plan（能力项，来自内置预设）。 */
             const tokenPlanSupportedOf = (model) => {
               const preset = presetPriceOf(model)
-              return preset !== undefined && preset.tokenPlanSupported === true
+              if (preset !== undefined && preset.tokenPlanSupported === true) return true
+              // 订阅型 provider 的模型即使不在内置名单里，也要能勾（自动规则已经把它算成套餐，
+              // 用户得能取消）。
+              return isSubscriptionProvider(pricingProviderOf(model))
             }
             const shapeOf = (p) => (p
               ? { currency: p.currency || 'USD', input: p.input, output: p.output, cacheRead: p.cacheRead, cacheWrite: p.cacheWrite, peak: p.peak || null, peak2: p.peak2 || null }
@@ -994,6 +1032,9 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
              * @returns {object} 价格对象（缺省为零价结构）。
              */
             const displayPriceOf = (model) => {
+              // provider 覆盖价是用户为"某个 provider"显式填的，天然生效（不受自定义开关影响）。
+              const override = providerOverrideOf(model)
+              if (override !== undefined) return shapeOf(override)
               const chosen = customPricingOf(model) ? storedPriceOf(model) : (presetPriceOf(model) || storedPriceOf(model))
               return chosen === undefined ? shapeOf(undefined) : shapeOf(chosen)
             }
@@ -1180,6 +1221,12 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                 .then(() => { setSaving(null); refresh() })
                 .catch((err) => { setSaving(null); setError((err && err.message) || String(err)) })
             }
+            /**
+             * 固定/恢复该模型的计价来源（provider）。
+             * 传空串即恢复"自动"（单来源用它、多来源用基础价）。同样只发这一个字段，
+             * 不触碰任何单价数值；切来源后会按新来源显示对应的价。
+             */
+            const setPricingProvider = (model, provider) => togglePricingFlag(model, 'provider', provider)
 
             const savePrice = (model) => {
               const d = draftOf(model)
@@ -1187,6 +1234,8 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
               postAction({
                 action: 'set-price', model,
                 price: {
+                  // 选中具体 provider 时，这次编辑写进它的覆盖价；否则写基础价。
+                  providerId: pricingProviderOf(model) || undefined,
                   currency: d.currency,
                   input: d.input,
                   output: d.output,
@@ -1464,7 +1513,12 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
               const planSupported = tokenPlanSupportedOf(model)
               // 关掉自定义计费时展示的是内置默认价：可看不可改（勾上开关即可编辑，
               // 用户填过的数字一直保留着）。走套餐时价格与费用都不参与计算，同样只读。
-              const priceLocked = plan || !custom
+              // 选了具体 provider 且有覆盖价时，即便基础价没自定义也允许编辑——覆盖价是
+              // 用为这个 provider 显式填的，天然生效。
+              const pricingProvider = pricingProviderOf(model)
+              const providerList = providersOf(model)
+              const hasOverride = providerOverrideOf(model) !== undefined
+              const priceLocked = plan || (!custom && !hasOverride)
               // 每张卡片只给两行信息：一行"花了多少"，一行 token 明细（单行内联，
               // 不再用四列网格占掉一整屏高）。费用是决策依据，所以放主位。
               const hitPct = row && (row.inputTokens + row.cacheReadTokens) > 0
@@ -1556,6 +1610,23 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                           : null,
                         React.createElement('span', { className: 'mu-hint' },
                           plan ? t('tokenPlanHint') : (custom ? t('customPricingOn') : t('customPricingOff')))),
+                      // 计价来源：同一个模型在不同 provider 上单价可能不同（同名不同源）。
+                      // 单来源时自动选定并标注；多来源未指定时提示，避免"到底按谁的价"变成暗箱。
+                      providerList.length > 0
+                        ? React.createElement('div', { className: 'mu-provider-row' },
+                            React.createElement('span', { className: 'mu-field-label' }, t('pricingProvider')),
+                            React.createElement('select', {
+                              className: 'mu-select', value: pricingProvider || '', disabled: saving === model,
+                              onChange: (e) => setPricingProvider(model, e.target.value),
+                            },
+                              React.createElement('option', { value: '' },
+                                t('providerAuto') + (pricingProvider !== undefined ? '（' + pricingProvider + '）' : '')),
+                              providerList.map((id) => React.createElement('option', { key: id, value: id },
+                                id + (isSubscriptionProvider(id) ? ' · ' + t('providerSubscription') : '')))),
+                            providerList.length > 1 && storedPriceOf(model)?.provider === undefined
+                              ? React.createElement('span', { className: 'mu-hint' }, t('providerMixed'))
+                              : null)
+                        : null,
                       React.createElement('div', { className: 'mu-price-cur' },
                         React.createElement('span', { className: 'mu-field-label' }, t('pricingCurrency')),
                         React.createElement('select', { className: 'mu-select', value: d.currency || 'USD', onChange: (e) => setDraft(model, 'currency', e.target.value) }, curOptions)),

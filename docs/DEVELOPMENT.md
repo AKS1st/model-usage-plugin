@@ -111,6 +111,22 @@ null），否则价格表单会拿到 null 崩掉。**注意别再把两者合�
 `price`**；Host 收到只有开关的请求时只改开关、绝不重写数值。若客户端把表单里的数字一起发过去，
 关掉自定义计费时表单显示的正是内置默认价，一发送就覆盖了用户填过的价。两端各有测试钉住。
 
+**provider 维度**：价格表以模型 id 为主键，另有两层 provider 相关字段——
+`prices[model].provider`（用户固定的计价来源）与 `prices[model].providers[providerId]`
+（该 provider 的覆盖价）。生效价格的解析顺序（客户端 `displayPriceOf` / `priceOf`）：
+
+1. `tokenPlan` 生效 → 不计费（返回 null）；
+2. 所选 provider 有覆盖价 → 用它（覆盖价是用户显式填的，不受 `customPricing` 开关影响）；
+3. 否则按 `customPricing` 在"用户基础价"与"内置默认价"之间选。
+
+计价来源的自动判定：用户固定优先；否则**单来源**模型直接用它的 provider；多来源且未指定时
+用基础价并在界面标注（台账不按 provider 拆 token，因此多来源无法精确分摊——本机只有 2 个
+这样的模型，且都是 DeepSeek 经 dashscope，同价）。
+
+**`tokenPlan` 是三态**：缺省 = 跟随 provider（订阅型 provider 的模型默认算套餐）；
+`true` = 用户勾选；`false` = 用户明确取消（**false 必须落盘**，否则重启后又被自动打开）。
+订阅型 provider 名单由 Host 的 `SUBSCRIPTION_PROVIDERS` 定义并随快照下发，规则只有一处。
+
 **价目刷新（2026-09-14，官方页）**：GPT-5.6 luna/terra/sol 修正为官方值（此前只有一半）、
 Astra 与 GLM-5.2/5.3 补上缓存命中价；同时删除 V4-Pro 的 `rerouteFrom/rerouteTo`——官方脚注 (2)
 已改为"继续提供、计费不变"，旧规则会把 9/14 之后的 V4-Pro 用量低估约 5 倍。被替换掉的旧值

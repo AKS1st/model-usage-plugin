@@ -502,6 +502,15 @@ for (const tokenPlanId of TOKEN_PLAN_MODELS) {
   if (entry !== undefined) entry.tokenPlanSupported = true
 }
 
+// **订阅型 provider**：这些 provider 的用量由订阅（而非按量 API）覆盖，
+// 因此它们的模型默认按 token plan 处理——只记 token、不计费用。
+// 依据是本机实测的 provider 名（`request/context` 事件里的 provider 字段）：
+// `openai-codex` 即 Codex 订阅。名单随快照下发给客户端，规则只有这一处定义。
+const SUBSCRIPTION_PROVIDERS = [
+  'openai-codex',
+  'claude-code',
+]
+
 // 模型 id 归一化：把 provider 前缀、日期后缀、`:batch` 变体和已退役的 DeepSeek 旧 id
 // 折叠到价格表的规范键。DeepSeek 在 2026-09-10 把模型名改为 `deepseek-flash`，
 // V4-Flash 系列随即下线；兼容 id 仍可调用但按 Flash 价计费，因此必须折叠到同一价格。
@@ -677,6 +686,35 @@ export function apply(ctx) {
     return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0
   }
 
+  /**
+   * 规范化 provider 级覆盖价。
+   *
+   * 同一个模型 id 在不同 provider 上可能单价不同（同名不同源：`glm-5.1` 在
+   * 阿里云百炼是 CNY 6/24/1.6、在 Z.AI 是 USD 1.4/0.26/4.4）。价格表以模型 id 为主键，
+   * 这里额外挂一层 `providers[providerId]` 覆盖，缺省则回落到该模型的基础价。
+   * 只接受结构完整的条目，坏数据直接丢弃而不是写回半成品。
+   * @param {unknown} value - 数据文件里的 providers 字段。
+   * @returns {object|undefined} 规范化后的覆盖表；没有有效条目时返回 undefined。
+   */
+  function normalizeProviderPrices(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    const out = {}
+    for (const [providerId, entry] of Object.entries(value)) {
+      const id = String(providerId || '').trim()
+      if (id === '' || !entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+      out[id] = {
+        currency: normalizeCurrency(entry.currency) || 'USD',
+        input: normalizePrice(entry.input),
+        output: normalizePrice(entry.output),
+        cacheRead: normalizePrice(entry.cacheRead),
+        cacheWrite: normalizePrice(entry.cacheWrite),
+        peak: copyWindow(entry.peak),
+        peak2: copyWindow(entry.peak2),
+      }
+    }
+    return Object.keys(out).length > 0 ? out : undefined
+  }
+
   // 深拷贝默认预设：peak / peak2 是内嵌对象、weekdays 是内嵌数组，
   // 避免价格对象与常量共享引用后被就地改写。
   const copyPreset = (preset) => {
@@ -815,7 +853,14 @@ export function apply(ctx) {
             // `tokenPlan` 表示该模型走套餐（只记 token 不计费）。
             // 只存 true，缺省即 false，数据文件保持精简。
             customPricing: value.customPricing === true ? true : undefined,
-            tokenPlan: value.tokenPlan === true ? true : undefined,
+            // `tokenPlan` 是**三态**：缺省 = 跟随 provider 的自动规则（订阅型 provider 默认算套餐）；
+            // true = 明确勾选；false = 明确不勾（即使来自订阅型 provider 也按量计费）。
+            // 因此 false 必须保留，不能像其他开关那样"只存 true"。
+            tokenPlan: typeof value.tokenPlan === 'boolean' ? value.tokenPlan : undefined,
+            // 该模型**计价来源**（provider id）：缺省即按观测到的 provider 自动判定。
+            provider: typeof value.provider === 'string' && value.provider !== '' ? value.provider : undefined,
+            // provider 级覆盖价：同一个模型在不同 provider 上可能单价不同（同名不同源）。
+            providers: normalizeProviderPrices(value.providers),
             // `rerouteFrom`/`rerouteTo` 是 0.4.0–0.16.5 用来表达"9/14 之后 V4-Pro 改按
             // Flash 价计费"的时点规则。官方定价页脚注 (2)（2026-09-14）已明确 V4-Pro
             // **继续提供且计费不变**，因此这条规则被推翻、字段不再透传：
@@ -1911,6 +1956,9 @@ export function apply(ctx) {
       // `days` 是最后一次运行的增量（手动 action 也复用它）；
       // `daysTotal` 是本进程内累计恢复的天数，面板那句话用它。
       backfill: { ...backfill, daysTotal: backfillDaysTotal },
+      // 订阅型 provider 名单：客户端的"自动走 token plan"规则据此判定。
+      // 名单只在 Host 定义一处，避免两端各存一份后漂移。
+      subscriptionProviders: SUBSCRIPTION_PROVIDERS.slice(),
       // 诊断用：卡住的运行会让 state 停在旧值，光看 state 分不清"没数据"和"被锁死"。
       backfillDebug: {
         running: backfillRunning,
@@ -1933,6 +1981,8 @@ export function apply(ctx) {
         const flagPatch = {}
         if (typeof body?.customPricing === 'boolean') flagPatch.customPricing = body.customPricing
         if (typeof body?.tokenPlan === 'boolean') flagPatch.tokenPlan = body.tokenPlan
+        // 计价来源：传 provider id 即固定用该 provider 的价，传空串即恢复自动判定。
+        if (typeof body?.provider === 'string') flagPatch.provider = body.provider
 
         // 只翻开关时**绝不重写数值**：这是"勾选/取消勾选不丢用户自定义计费"的落点。
         // 客户端在开关切换时只发 `{model, customPricing|tokenPlan}`，不带上表单里那些
@@ -1943,7 +1993,10 @@ export function apply(ctx) {
           if (base === undefined) return { ok: false, error: 'no price to attach the flag to' }
           const next = { ...base }
           if (flagPatch.customPricing !== undefined) next.customPricing = flagPatch.customPricing ? true : undefined
-          if (flagPatch.tokenPlan !== undefined) next.tokenPlan = flagPatch.tokenPlan ? true : undefined
+          // `tokenPlan` 三态：false 是"明确不要套餐"，必须存下来，否则下次启动
+          // 又会被订阅型 provider 的自动规则打开。
+          if (flagPatch.tokenPlan !== undefined) next.tokenPlan = flagPatch.tokenPlan
+          if (flagPatch.provider !== undefined) next.provider = flagPatch.provider === '' ? undefined : flagPatch.provider
           prices.set(model, next)
           removed.delete(model)
           schedulePersist()
@@ -1971,10 +2024,10 @@ export function apply(ctx) {
           }
           if (!existing) return { ok: true, skipped: 'no price configured' }
         }
-        prices.set(model, {
+        const written = {
           // 开关跟随请求，缺省沿用已有值（旧 Client 不带这两个字段时不丢状态）。
           customPricing: flagPatch.customPricing !== undefined ? (flagPatch.customPricing ? true : undefined) : existing?.customPricing,
-          tokenPlan: flagPatch.tokenPlan !== undefined ? (flagPatch.tokenPlan ? true : undefined) : existing?.tokenPlan,
+          tokenPlan: flagPatch.tokenPlan !== undefined ? flagPatch.tokenPlan : existing?.tokenPlan,
           currency: normalizeCurrency(src.currency) || (existing && existing.currency) || 'USD',
           input: normalizePrice(src.input),
           output: normalizePrice(src.output),
@@ -1999,7 +2052,18 @@ export function apply(ctx) {
             timezone: normalizeTimezone(peak2Src.timezone !== undefined ? peak2Src.timezone : existing?.peak2?.timezone),
             weekdays: peak2Src.weekdays !== undefined ? normalizeWeekdays(peak2Src.weekdays) : normalizeWeekdays(existing?.peak2?.weekdays),
           },
-        })
+        }
+        // `price.providerId` 存在时，这次编辑写进 `providers[providerId]` 覆盖，
+        // 基础价（缺省价）保持不变。UI 的"计价来源"选择器就是靠它区分同名不同源。
+        const providerId = typeof src.providerId === 'string' && src.providerId !== '' ? src.providerId : null
+        if (providerId === null) {
+          prices.set(model, written)
+        } else {
+          prices.set(model, {
+            ...(existing ?? {}),
+            providers: { ...(existing?.providers ?? {}), [providerId]: written },
+          })
+        }
         removed.delete(model)
         schedulePersist()
         return { ok: true }

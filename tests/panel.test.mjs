@@ -673,3 +673,73 @@ test('a token plan model is labelled as tokens-only instead of a price', { concu
     handle.unmount()
   }
 })
+
+test('a subscription-backed provider defaults to token plan, and an explicit opt-out wins', { concurrency: 1 }, async () => {
+  // openai-codex 是订阅型 provider：它的用量本来就不按量计费，所以默认按 token plan
+  // （只记 token）。用户明确取消时必须以用户为准——那时才按 API 单价估算。
+  const base = makeSnapshot(2)
+  const snapshot = {
+    ...base,
+    subscriptionProviders: ['openai-codex'],
+    rows: base.rows.map((row) => ({ ...row, providers: ['openai-codex'] })),
+    prices: base.prices,
+  }
+  const handle = await mountPanel(snapshot)
+  try {
+    const auto = await openCard(handle, 'm-01')
+    const autoFlags = auto.querySelector('.mu-flags').textContent
+    assert.ok(/tokenPlanHint/.test(autoFlags), '订阅型 provider 应默认走套餐：' + autoFlags)
+    const autoBox = [...auto.querySelectorAll('.mu-flag')]
+      .find((node) => node.textContent === 'tokenPlan').querySelector('input[type=checkbox]')
+    assert.equal(autoBox.checked, true, '默认应勾上')
+  } finally {
+    handle.unmount()
+  }
+
+  // 显式取消：即使 provider 仍是订阅型，也要按量计费。
+  const optedOut = {
+    ...snapshot,
+    prices: { ...base.prices, 'm-01': { ...base.prices['m-01'], tokenPlan: false } },
+  }
+  const handle2 = await mountPanel(optedOut)
+  try {
+    const card = await openCard(handle2, 'm-01')
+    const box = [...card.querySelectorAll('.mu-flag')]
+      .find((node) => node.textContent === 'tokenPlan').querySelector('input[type=checkbox]')
+    assert.equal(box.checked, false, '用户明确取消后不应再算套餐')
+  } finally {
+    handle2.unmount()
+  }
+})
+
+test('the pricing source selector lists observed providers and only sends the choice', { concurrency: 1 }, async () => {
+  const base = makeSnapshot(2)
+  const snapshot = {
+    ...base,
+    subscriptionProviders: ['openai-codex'],
+    rows: base.rows.map((row, index) => ({ ...row, providers: index === 0 ? ['deepseek-official', 'dashscope'] : ['openai-codex'] })),
+  }
+  const handle = await mountPanel(snapshot)
+  try {
+    const card = await openCard(handle, 'm-01')
+    const select = card.querySelector('.mu-provider-row select')
+    assert.ok(select, '多来源模型应有计价来源选择器')
+    const values = [...select.querySelectorAll('option')].map((option) => option.value)
+    assert.ok(values.includes('deepseek-official') && values.includes('dashscope'), '选项应包含观测到的 provider：' + values.join('/'))
+    // 多来源且未指定时给出提示（避免"到底按谁的价"变成暗箱）。
+    assert.ok(/providerMixed/.test(card.querySelector('.mu-provider-row').textContent), '应提示多来源未指定')
+
+    await handle.React.act(async () => {
+      select.value = 'dashscope'
+      select.dispatchEvent(new handle.window.MouseEvent('change', { bubbles: true }))
+    })
+    await handle.React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    const posts = handle.calls.filter((call) => call && call.action === 'set-price')
+    assert.equal(posts.length, 1, '应恰好发出一次 set-price：' + JSON.stringify(handle.calls))
+    assert.equal(posts[0].provider, 'dashscope')
+    assert.equal('price' in posts[0], false, '切换来源不得带上任何单价')
+    assert.equal('customPricing' in posts[0], false, '切换来源不得顺带改开关')
+  } finally {
+    handle.unmount()
+  }
+})
