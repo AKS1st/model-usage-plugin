@@ -1527,7 +1527,11 @@ if (typeof window !== 'undefined' && typeof window.__ModuleLoader__ !== 'undefin
                 ? React.createElement(HeatmapCard, {
                     t,
                     series: view.heatSeries,
-                    backfilledDays: view.backfill && view.backfill.state !== 'unavailable' ? (view.backfill.days || 0) : 0,
+                    // 优先用跨轮累计（daysTotal）：一轮读不完语料时 `days` 只是最后一轮的增量，
+                    // 显示成"已回填 1 天历史"会让实际恢复的 17 天看起来像 1 天。
+                    backfilledDays: view.backfill && view.backfill.state !== 'unavailable'
+                      ? (view.backfill.daysTotal !== undefined ? view.backfill.daysTotal : (view.backfill.days || 0))
+                      : 0,
                   })
                 : null,
               React.createElement(EfficiencyCard, {

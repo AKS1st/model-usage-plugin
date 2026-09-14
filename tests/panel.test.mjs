@@ -532,3 +532,38 @@ test('the models tab merges id aliases exactly like the overview', { concurrency
     handle.unmount()
   }
 })
+
+test('the heatmap label reports the cumulative backfilled days, not the last run', { concurrency: 1 }, async () => {
+  // 一轮读不完整个语料，会分几轮补完：最后一轮的增量可能只有 1 天，
+  // 而实际恢复了 17 天。面板必须说 17，否则恢复量被严重低报。
+  const snapshot = {
+    ...makeSnapshot(3),
+    // 热力图卡只在 host 下发 heatSeries 时渲染（见上面"字段缺失则整卡不渲染"的用例）。
+    heatSeries: [{ d: '2026-09-14', t: 5_000_000, k: 30 }],
+    backfill: { state: 'done', days: 1, daysTotal: 17, sessions: 58, scanned: 58, skipped: 528, total: 589 },
+  }
+  const handle = await mountPanel(snapshot)
+  try {
+    const text = handle.container.querySelector('.mu-heat-card').textContent
+    assert.ok(/heatBackfilled\(days=17\)/.test(text), '回填标签应显示累计的 17 天：' + text)
+    assert.ok(!/heatBackfilled\(days=1\)/.test(text), '不得显示最后一轮的 1 天：' + text)
+  } finally {
+    handle.unmount()
+  }
+})
+
+test('the heatmap label falls back to the per-run count on an older snapshot', { concurrency: 1 }, async () => {
+  // 旧 Host 快照没有 daysTotal，客户端不能因此显示 0。
+  const snapshot = {
+    ...makeSnapshot(3),
+    heatSeries: [{ d: '2026-09-14', t: 5_000_000, k: 30 }],
+    backfill: { state: 'done', days: 4 },
+  }
+  const handle = await mountPanel(snapshot)
+  try {
+    const text = handle.container.querySelector('.mu-heat-card').textContent
+    assert.ok(/heatBackfilled\(days=4\)/.test(text), '应回退到 days：' + text)
+  } finally {
+    handle.unmount()
+  }
+})

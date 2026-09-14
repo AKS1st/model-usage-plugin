@@ -594,6 +594,10 @@ export function apply(ctx) {
   const heatBuckets = new Map()
   // 历史回填是否已完成。完成前每次启动都会再跑一轮（带时间预算，可续跑）。
   let heatBackfilled = false
+  // 回填累计恢复的天数。一轮读不完整个语料，按天幂等会分几轮补完（线上实测 4 轮补了 17 天）；
+  // 面板要显示的是"恢复了多少历史"，而不是最后一轮的增量（那会显示成 1 天）。
+  // **必须在 loadState() 之前声明**：它会被 loadState 赋值，`let` 的 TDZ 会让启动直接抛错。
+  let backfillDaysTotal = 0
   // 回填完成的标记用**递增版本号**而不是布尔：旧版本曾在"语料为空"时误标完成，
   // 布尔标记会让那些数据永远不再回填。换成版本号后，旧布尔值自然失效、会重跑一轮。
   const HEAT_BACKFILL_REV = 2
@@ -823,6 +827,9 @@ export function apply(ctx) {
       loadBucketTable(raw.hourBuckets, hourBuckets)
       loadHeatBuckets(raw.heatBuckets)
       if (raw.heatBackfillRev === HEAT_BACKFILL_REV) heatBackfilled = true
+      // 回填恢复过的天数要跨重启保留：否则补齐之后再重启，回填被跳过、
+      // 面板那句话就整句消失，用户看不到"历史是补来的"。
+      if (Number.isFinite(raw.recoveredDays) && raw.recoveredDays > 0) backfillDaysTotal = Math.floor(raw.recoveredDays)
       // 恢复"当前小时"指针，让重启后紧接着的采样落进已有桶而不是另起一个。
       const nowKey = hourKeyOf(new Date())
       if (hourBuckets.has(nowKey)) {
@@ -900,6 +907,7 @@ export function apply(ctx) {
         hourBuckets: Object.fromEntries(hourBuckets),
         heatBuckets: Object.fromEntries(heatBuckets),
         heatBackfillRev: heatBackfilled ? HEAT_BACKFILL_REV : 0,
+        recoveredDays: backfillDaysTotal,
         balanceBaseUrl,
         balance,
         rates,
@@ -1207,6 +1215,9 @@ export function apply(ctx) {
         if (heatBuckets.has(dayKey)) continue      // 已有账（实时采过）→ 不碰，避免重复计算
         heatBuckets.set(dayKey, { tokens: totals.tokens, tools: totals.tools })
         filled += 1
+        // 在这一刻累计而不是在函数返回时累计：中途抛错时，已经写进台账的日子
+        // 仍然是"恢复过的历史"，不能在计数里丢掉。
+        backfillDaysTotal += 1
         // 明细日账只补快照窗口内的日子：它带着逐模型信息，属于"看得见"的范围。
         if (!dayBuckets.has(dayKey) && dayBuckets.size < MAX_DAYS) {
           const bucket = makeBucket()
@@ -1838,7 +1849,9 @@ export function apply(ctx) {
       ratesFetchedAt,
       targetCurrency,
       pluginVersion: PLUGIN_VERSION,
-      backfill,
+      // `days` 是最后一次运行的增量（手动 action 也复用它）；
+      // `daysTotal` 是本进程内累计恢复的天数，面板那句话用它。
+      backfill: { ...backfill, daysTotal: backfillDaysTotal },
       // 诊断用：卡住的运行会让 state 停在旧值，光看 state 分不清"没数据"和"被锁死"。
       backfillDebug: {
         running: backfillRunning,

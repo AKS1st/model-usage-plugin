@@ -540,9 +540,52 @@ test('backfill advances to older days across attempts instead of re-reading the 
         daysAgo + ' 天前那天最终应被补上（说明能跨轮推进）')
     }
     assert.ok((after.backfill.skipped || 0) > 0, '后续轮次应跳过已覆盖的日子（实际 ' + after.backfill.skipped + '）')
+    // 面板显示的是累计值：最后一轮的增量可能只有 1 天，但实际恢复了 5 天。
+    assert.equal(after.backfill.daysTotal, days.length,
+      'daysTotal 应是跨轮累计（实际 ' + after.backfill.daysTotal + '）')
+    assert.ok(after.backfill.days <= after.backfill.daysTotal,
+      '单轮增量不可能超过累计值')
   } finally {
     if (previousBudget === undefined) delete process.env.DSH_MODEL_USAGE_BACKFILL_BUDGET_MS
     else process.env.DSH_MODEL_USAGE_BACKFILL_BUDGET_MS = previousBudget
     await plugin.stop()
+  }
+})
+
+test('the recovered-days total survives a restart', { concurrency: 1 }, async () => {
+  // 补齐之后再重启，回填会被跳过（heatBackfillRev 已写）。若累计值不落盘，
+  // 面板那句"已回填 N 天历史"就整句消失——用户看不到"这些历史是补来的"。
+  const initial = {
+    version: 7, stats: {}, prices: {}, removed: [],
+    heatBuckets: { '2026-09-10': { tokens: 100, tools: 2 } },
+    heatBackfillRev: 2,
+    recoveredDays: 17,
+  }
+  const plugin = await startWithHistory(initial, [])
+  try {
+    const snap = plugin.snapshot()
+    assert.equal(snap.backfill.state, 'skipped', '已完成时不再重扫')
+    assert.equal(snap.backfill.daysTotal, 17, '累计恢复天数必须跨重启保留（实际 ' + snap.backfill.daysTotal + '）')
+  } finally {
+    const saved = await plugin.stop()
+    assert.equal(saved.recoveredDays, 17, '落盘时要写出 recoveredDays')
+  }
+})
+
+test('a fresh backfill persists how many days it recovered', { concurrency: 1 }, async () => {
+  const history = [1, 2].map((daysAgo) => ({
+    id: 'p' + daysAgo,
+    createdAt: noonOf(daysAgo + 3),
+    events: [
+      { type: 'request/context', time: noonOf(daysAgo + 3), data: { model: 'm' } },
+      { type: 'assistant/message', time: noonOf(daysAgo + 3), data: { usage: { inputTokens: 7, outputTokens: 1 } } },
+    ],
+  }))
+  const plugin = await startWithHistory(undefined, history)
+  try {
+    assert.equal(plugin.snapshot().backfill.daysTotal, 2, '补齐两天就该记两天')
+  } finally {
+    const saved = await plugin.stop()
+    assert.equal(saved.recoveredDays, 2, '落盘要带 recoveredDays')
   }
 })
