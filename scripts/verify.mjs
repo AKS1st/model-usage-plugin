@@ -475,16 +475,22 @@ check('Client 组件渲染（jsdom 真实挂载 + 数据态）')
         assertThat(cardCount === 0, '总览不渲染模型卡片（实际 ' + cardCount + '）')
         assertThat(html.includes('mu-share-card'), '总览含占比卡')
         // 金额精度分档：主数字不该出现 6 位小数那种读不出来的形态。
-        // 注意不要用 `$` 之类的边界：textContent 会把多处金额连成一串，中间位置的金额匹配不到。
-        const moneyShown = text.match(/[\d,]+\.\d+(?=\s*CNY)/g) || []
+        //
+        // 逐**金额节点**校验，而不是在整页 textContent 上跑正则：textContent 会把相邻元素
+        // 直接连起来，模型名以数字结尾时（如 `aux-4`）会与紧随其后的金额粘成 `40.00324 CNY`，
+        // 于是合规的小额项被误判成"5 位小数越界"。这类假阳性比不检查更糟——它逼人忽略这条断言。
+        // 用全局 document（本检查已通过 installDom 把 jsdom 的 window/document 装到 globalThis）。
+        const moneyNodes = [...document.querySelectorAll('.mu-cost, .mu-big-value, .mu-eff-value')]
+          .map((node) => String(node.textContent || '').trim())
+          .filter((value) => /^[\d,]+(?:\.\d+)?\s+CNY$/.test(value))
         // 契约是分档的：>=0.01 最多 4 位，<0.01 才允许到 6 位（缓存命中单价极低）。
-        // 拿单一的位数上限去断言会把合规的小额项误判成缺陷。
-        const tooPrecise = moneyShown.filter((value) => {
-          const digits = (value.match(/\.(\d+)/) || [])[1].length
-          const magnitude = Number(value.replace(/,/g, ''))
-          return digits > (magnitude < 0.01 ? 6 : 4)
+        const tooPrecise = moneyNodes.filter((value) => {
+          const fraction = value.match(/\.(\d+)/)
+          if (fraction === null) return false
+          const magnitude = Number(value.replace(/[,\s].*$/, '').replace(/,/g, ''))
+          return fraction[1].length > (magnitude < 0.01 ? 6 : 4)
         })
-        assertThat(moneyShown.length > 0, '金额已按目标货币渲染（样例 ' + moneyShown.slice(0, 3).join(', ') + '）')
+        assertThat(moneyNodes.length > 0, '金额已按目标货币渲染（样例 ' + moneyNodes.slice(0, 3).join(', ') + '）')
         assertThat(tooPrecise.length === 0,
           '金额小数位符合分档契约（越界 ' + (tooPrecise.slice(0, 3).join(' / ') || '无') + '）')
         assertThat(html.includes('mu-ring') === false, '已移除环形图（避免整圆失真）')

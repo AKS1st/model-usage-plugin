@@ -35,10 +35,12 @@ test('V4.1 Flash compatibility ids share the Flash price', () => {
   }
 })
 
-test('V4 Pro keeps its own price until the documented reroute date', () => {
-  // 官方定价页脚注 2：北京时间 2026-09-14 12:00（04:00 UTC）之后，deepseek-v4-pro 的
-  // 请求才全部路由到 V4.1 Flash 并按 Flash 价计费。**在那之前它仍是独立的 V4-Pro-0813**，
-  // 有独立的价格与统计——把它当成 Flash 的别名会同时错算金额和合并统计。
+test('V4 Pro keeps its own price, with no reroute rule', () => {
+  // 官方定价页脚注 (2)（2026-09-14 抓取）：「我们决定在 2026 年 9 月 14 日之后**继续提供**
+  // DeepSeek V4 Pro 的 API 调用服务，**计费方式保持不变**」。
+  //
+  // 这条推翻了此前版本里的"9/14 之后改按 Flash 价计费"的时点规则。规则必须删除而不是
+  // 继续留着：留着会把 9/14 之后的 V4-Pro 调用按 Flash 价计费，低报约 5 倍。
   const officialPro = { currency: 'CNY', input: 4.5, output: 13.5, cacheRead: 0.15, cacheWrite: 0 }
   for (const id of ['deepseek-v4-pro', 'deepseek-v4-pro-0813']) {
     assert.equal(normalizeModelId(id), id, id + ' 不应被折叠成 Flash')
@@ -47,9 +49,8 @@ test('V4 Pro keeps its own price until the documented reroute date', () => {
     for (const field of ['input', 'output', 'cacheRead', 'cacheWrite']) {
       assert.equal(price[field], officialPro[field], id + '.' + field)
     }
-    // 改路由必须以"时点规则"表达，而不是把价格直接改成 Flash 价。
-    assert.equal(price.rerouteFrom, '2026-09-14T04:00:00Z', id + '.rerouteFrom')
-    assert.equal(price.rerouteTo, 'deepseek-flash', id + '.rerouteTo')
+    assert.equal(price.rerouteFrom, undefined, id + ' 不应再有改道时点')
+    assert.equal(price.rerouteTo, undefined, id + ' 不应再有改道目标')
   }
 })
 

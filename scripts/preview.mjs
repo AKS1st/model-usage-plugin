@@ -70,9 +70,11 @@ function makeSnapshot() {
     { model: 'glm-5.1', modelKey: 'glm-5.1', calls: 774, failed: 0, inputTokens: 2_956_661, cacheReadTokens: 52_774_912, cacheWriteTokens: 0, outputTokens: 266_773, reasoningTokens: 0, peakInputTokens: 0, peakCacheReadTokens: 0, peakCacheWriteTokens: 0, peakOutputTokens: 0, providers: ['dashscope'], toolCalls: 10, toolFailed: 0 },
   ]
   const presets = {
+    // DeepSeek 没有套餐（只有充值余额）→ 不显示 token plan 勾选框。
     'deepseek-flash': flash,
-    'gpt-5.6-sol': { currency: 'USD', input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
-    'gpt-5.6-luna': { currency: 'USD', input: 0.1, output: 0.6, cacheRead: 0.01, cacheWrite: 0.125 },
+    // 支持套餐的模型：截图里会多出一个"Token Plan"勾选框。
+    'gpt-5.6-sol': { currency: 'USD', input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5, tokenPlanSupported: true },
+    'gpt-5.6-luna': { currency: 'USD', input: 0.2, output: 1.2, cacheRead: 0.02, cacheWrite: 0.25, tokenPlanSupported: true },
   }
   // 造 N 个模型（--models=N 为**额外的**辅助模型数，默认 7 → 快照共 11 个模型）：总览必须限高，否则"高度随内容增长"这个缺陷
   // 在 5 个模型下看不出来。
@@ -144,7 +146,10 @@ function makeSnapshot() {
   if (process.argv.includes('--empty-heat')) heatSeries.length = 0
   return {
     rows,
-    prices: Object.fromEntries(Object.entries(presets).concat([['glm-5.1', { currency: 'CNY', input: 4.29, output: 15.73, cacheRead: 0.79, cacheWrite: 0 }]])),
+    prices: Object.fromEntries(Object.entries(presets).concat([
+      ['glm-5.1', { currency: 'CNY', input: 4.29, output: 15.73, cacheRead: 0.79, cacheWrite: 0, customPricing: true }],
+      ['gpt-5.6-luna', { ...presets['gpt-5.6-luna'], tokenPlan: true }],
+    ])),
     presets,
     daySeries,
     hourSeries,

@@ -313,15 +313,11 @@ function deepSeekPeak(offPeak) {
 // 价格对象带 presetRev 说明它是某个版本的默认预设，可以放心升级；没有该字段
 // （或基础价等于历史默认价）才按旧数据的启发式判断。每次官方调价或峰谷口径
 // 变化都要递增它。
-const PRESET_REV = 3
+const PRESET_REV = 4
 
 // 低于该状态版本的数据才会跑一次默认价迁移。v5 引入了 presetRev 机制，
 // 之后的价格口径变化靠 PRESET_REV 递增来驱动。
 const PRESET_STATE_VERSION = 5
-
-// V4 Pro 改由 V4.1 Flash 服务的时点：北京时间 2026-09-14 12:00 = 04:00 UTC。
-// 官方定价页脚注 (2)。此前的调用仍按 V4-Pro-0813 的价格结算。
-const V4_PRO_REROUTE_AT = '2026-09-14T04:00:00Z'
 
 // 历代默认预设的高峰窗口签名（时区 + 星期 + 时段）。用于识别停留在旧版默认
 // 窗口上的价格，其中 rev 3 及以上才记录 timezone/weekdays。窗口之间用 ; 分隔。
@@ -361,32 +357,26 @@ const PRESET_PRICES = {
     currency: 'CNY', input: 1, output: 4, cacheRead: 0.02, cacheWrite: 0,
     ...deepSeekPeak({ input: 1, output: 4, cacheRead: 0.02 }),
   },
-  // V4 Pro：**9 月 14 日 12:00 北京时间之前**仍由 V4-Pro-0813 提供，按 V4-Pro 自己的
-  // 价格计费（空闲 ¥4.5 / ¥13.5 / ¥0.15，高峰 2 倍）。此后至 V4.1 Pro 上线前，请求
-  // 全部路由到 V4.1 Flash 并按 Flash 价计费——所以这是一条**带时点的规则**，
-  // 不是"改个数字"。
-  //
-  // 曾经直接预置成 Flash 价，导致 9/14 之前的历史调用被系统性低估计费。
+  // V4 Pro：官方定价页脚注 (2)（2026-09-14 抓取）明确「在 2026 年 9 月 14 日之后
+  // **继续提供** DeepSeek V4 Pro 的 API 调用服务，**计费方式保持不变**」。
+  // 因此原先那条"9/14 之后改道到 Flash"的规则已被官方推翻，必须删掉：
+  // 保留它会把 9/14 之后的 V4-Pro 调用错误地按 Flash 价计费（低报约 5 倍）。
   'deepseek-v4-pro': {
     currency: 'CNY', input: 4.5, output: 13.5, cacheRead: 0.15, cacheWrite: 0,
     ...deepSeekPeak({ input: 4.5, output: 13.5, cacheRead: 0.15 }),
-    rerouteFrom: V4_PRO_REROUTE_AT,
-    rerouteTo: 'deepseek-flash',
   },
   'deepseek-v4-pro-0813': {
     currency: 'CNY', input: 4.5, output: 13.5, cacheRead: 0.15, cacheWrite: 0,
     ...deepSeekPeak({ input: 4.5, output: 13.5, cacheRead: 0.15 }),
-    rerouteFrom: V4_PRO_REROUTE_AT,
-    rerouteTo: 'deepseek-flash',
   },
   // `deepseek-chat` / `deepseek-reasoner` 已于 2026-07-24 停止服务，官方定价页
   // 不再列出。保留最后一段计费口径（按 V4-Flash 价），仅供历史统计对账。
   'deepseek-chat': { currency: 'CNY', input: 1, output: 2, cacheRead: 0.2, cacheWrite: 0 },
   'deepseek-reasoner': { currency: 'CNY', input: 1, output: 2, cacheRead: 0.2, cacheWrite: 0 },
   // OpenAI（海外，USD / 百万 tokens）
-  'gpt-5.6-luna': { currency: 'USD', input: 0.1, output: 0.6, cacheRead: 0.01, cacheWrite: 0.125 },
-  'gpt-5.6-terra': { currency: 'USD', input: 1, output: 6, cacheRead: 0.1, cacheWrite: 1.25 },
-  'gpt-5.6-sol': { currency: 'USD', input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
+  'gpt-5.6-luna': { currency: 'USD', input: 0.2, output: 1.2, cacheRead: 0.02, cacheWrite: 0.25 },
+  'gpt-5.6-terra': { currency: 'USD', input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2.5 },
+  'gpt-5.6-sol': { currency: 'USD', input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5 },
   'gpt-5.5': { currency: 'USD', input: 5, output: 30, cacheRead: 0.5, cacheWrite: 0 },
   'gpt-5.4': { currency: 'USD', input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 0 },
   'gpt-5.4-mini': { currency: 'USD', input: 0.75, output: 4.5, cacheRead: 0.075, cacheWrite: 0 },
@@ -442,10 +432,10 @@ const PRESET_PRICES = {
   // GLM-5.2 / GLM-5.3：Z.ai 官方**尚未公布 API 价格**（官方文档只列到 GLM-5.1 / GLM-5）。
   // 这里按上一代旗舰的公开行情 $1.40 / $4.40 预置，属于**参考值**——它比"0 元"
   // 诚实（0 会被读成免费），但请以官方公布为准。缓存价未公布，按 0 处理。
-  'glm-5.2': { currency: 'USD', input: 1.4, output: 4.4, cacheRead: 0, cacheWrite: 0 },
-  'glm-5.3': { currency: 'USD', input: 1.4, output: 4.4, cacheRead: 0, cacheWrite: 0 },
+  'glm-5.2': { currency: 'USD', input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 0 },
+  'glm-5.3': { currency: 'USD', input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 0 },
   // OpenAI GPT-6 Astra：$10 / $50 每百万 tokens（USD）。
-  'gpt-6-astra': { currency: 'USD', input: 10, output: 50, cacheRead: 0, cacheWrite: 0 },
+  'gpt-6-astra': { currency: 'USD', input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
 }
 
 // 历史官方默认预设价，仅用于启动迁移：区分「用户停留在旧默认价」与「用户自定义价」。
@@ -466,6 +456,17 @@ const LEGACY_PRESET_PRICES = {
     'deepseek-v4-pro': { currency: 'CNY', input: 1, output: 4, cacheRead: 0.02, cacheWrite: 0 },
     'deepseek-v4-pro-0813': { currency: 'CNY', input: 1, output: 4, cacheRead: 0.02, cacheWrite: 0 },
   },
+  // 0.4.0–0.16.5 的 OpenAI / Z.AI 预置价（2026-09-14 按官方价目修正前）：
+  // GPT-5.6 三档整体少了一半，Astra 与 GLM-5.2/5.3 漏了缓存命中价（读缓存被当成
+  // 未命中计费 → 高估）。登记下来，让停留在这些值的用户被自动升级。
+  v0165: {
+    'gpt-5.6-luna': { currency: 'USD', input: 0.1, output: 0.6, cacheRead: 0.01, cacheWrite: 0.125 },
+    'gpt-5.6-terra': { currency: 'USD', input: 1, output: 6, cacheRead: 0.1, cacheWrite: 1.25 },
+    'gpt-5.6-sol': { currency: 'USD', input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
+    'gpt-6-astra': { currency: 'USD', input: 10, output: 50, cacheRead: 0, cacheWrite: 0 },
+    'glm-5.2': { currency: 'USD', input: 1.4, output: 4.4, cacheRead: 0, cacheWrite: 0 },
+    'glm-5.3': { currency: 'USD', input: 1.4, output: 4.4, cacheRead: 0, cacheWrite: 0 },
+  },
   // 0.3.2（2026-08-17 峰谷调价后，V4-Flash 空闲 ¥1.5/¥4.5/¥0.05；V4-Pro 与此后官方价一致）。
   v032: {
     'deepseek-v4-flash': { currency: 'CNY', input: 1.5, output: 4.5, cacheRead: 0.05, cacheWrite: 0 },
@@ -476,6 +477,29 @@ const LEGACY_PRESET_PRICES = {
     'deepseek-chat': { currency: 'CNY', input: 2, output: 8, cacheRead: 0.5, cacheWrite: 0 },
     'deepseek-reasoner': { currency: 'CNY', input: 4, output: 16, cacheRead: 1, cacheWrite: 0 },
   },
+}
+
+// 支持「token plan」（预付 token 套餐 / 订阅制）的模型。
+//
+// 为什么需要这个标记：这类模型的用量由套餐覆盖，按量算出来的"费用"是**假的**——
+// 勾选后插件只记 token、不再计费。名单按官方套餐的覆盖范围给出：
+// 阿里云 Token Plan 的 Qwen 系、智谱/火山方舟 Coding Plan 的 GLM 系、
+// OpenAI 的 Codex/ChatGPT 订阅、Anthropic 与 Google 的订阅、Moonshot 的 Kimi 套餐。
+// **DeepSeek 没有套餐**（只有充值余额，按量扣减），因此不在此列——这也是这份名单
+// 还能区分"该不该显示这个勾选框"的原因。需要增删直接改这里。
+const TOKEN_PLAN_MODELS = [
+  'qwen3-max', 'qwen3-max-thinking', 'qwen-plus',
+  'glm-4.5', 'glm-4.5-air', 'glm-4.6', 'glm-5.1', 'glm-5.2', 'glm-5.3', 'glm-5.3-flash',
+  'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.1', 'gpt-5.2', 'gpt-5.3', 'gpt-5.4', 'gpt-5.4-mini',
+  'gpt-5.4-nano', 'gpt-5.5', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-6-astra',
+  'claude-opus-4', 'claude-opus-4.5', 'claude-opus-4.7', 'claude-opus-4.8',
+  'claude-sonnet-4', 'claude-sonnet-4.5', 'claude-sonnet-4.6', 'claude-haiku-4.5',
+  'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3-pro-preview', 'gemini-3-flash',
+  'kimi-k2', 'kimi-k2-thinking', 'kimi-k2.7',
+]
+for (const tokenPlanId of TOKEN_PLAN_MODELS) {
+  const entry = PRESET_PRICES[tokenPlanId]
+  if (entry !== undefined) entry.tokenPlanSupported = true
 }
 
 // 模型 id 归一化：把 provider 前缀、日期后缀、`:batch` 变体和已退役的 DeepSeek 旧 id
@@ -773,6 +797,9 @@ export function apply(ctx) {
           })
         }
       }
+      // 老数据没有「自定义计费」开关。判定规则：**与内置默认价不同**的条目是用户自己填的，
+      // 必须保留并标记为自定义；相同的就是插件发的默认价，交给迁移继续升级。
+      // 只写 true，false 一律留 undefined，避免数据文件被无意义地撑大。
       if (raw.prices && typeof raw.prices === 'object') {
         for (const [key, value] of Object.entries(raw.prices)) {
           if (!value || typeof value !== 'object') continue
@@ -784,9 +811,15 @@ export function apply(ctx) {
             currency: normalizeCurrency(value.currency) || 'USD',
             // 旧数据没有版本戳：迁移会退回按基础价与窗口签名的启发式判断。
             presetRev: Number.isInteger(value.presetRev) && value.presetRev > 0 ? value.presetRev : undefined,
-            // 时点规则必须透传，否则重启后 V4-Pro 的改路由费率会丢。
-            rerouteFrom: typeof value.rerouteFrom === 'string' ? value.rerouteFrom : undefined,
-            rerouteTo: typeof value.rerouteTo === 'string' ? value.rerouteTo : undefined,
+            // 两个开关：`customPricing` 决定用用户填的价还是内置默认价，
+            // `tokenPlan` 表示该模型走套餐（只记 token 不计费）。
+            // 只存 true，缺省即 false，数据文件保持精简。
+            customPricing: value.customPricing === true ? true : undefined,
+            tokenPlan: value.tokenPlan === true ? true : undefined,
+            // `rerouteFrom`/`rerouteTo` 是 0.4.0–0.16.5 用来表达"9/14 之后 V4-Pro 改按
+            // Flash 价计费"的时点规则。官方定价页脚注 (2)（2026-09-14）已明确 V4-Pro
+            // **继续提供且计费不变**，因此这条规则被推翻、字段不再透传：
+            // 老数据里存过的值一律忽略，下次落盘即被清除（留着会继续按错价计费）。
             input: normalizePrice(value.input),
             output: normalizePrice(value.output),
             cacheRead: normalizePrice(value.cacheRead),
@@ -980,6 +1013,9 @@ export function apply(ctx) {
       const key = normalizeModelId(model)
       const preset = PRESET_PRICES[key]
       if (!preset) continue
+      // 用户明确选了「自定义计费」的条目一律不碰：那些数字是他的，不是插件的默认值。
+      // （开关关掉时数值仍然保留，所以这里只看开关，不看数值是否等于当前预设。）
+      if (price.customPricing === true) continue
       if (price.presetRev === PRESET_REV) continue
       if ((price.peak && price.peak.enabled === false) || (price.peak2 && price.peak2.enabled === false)) continue
       // 开关开着但没有有效时段（手加模型留下的空窗口）：这种价格从未被计过高峰，
@@ -1077,6 +1113,10 @@ export function apply(ctx) {
   // （例如 `deepseek-flash` 在旧版本里不存在），之后永远不会补上，界面上就出现
   // "有调用量但没有价格"。这里在启动时兜底补齐。
   if (backfillMissingPrices() > 0 || migrated) schedulePersist()
+  // **必须在迁移之后**判定"用户自定义计费"：迁移负责把"停在历代默认价"的条目升级到
+  // 当前口径；如果先判定，历史默认价会因为"与当前预设不同"而被误判成用户自己填的，
+  // 迁移从此碰不到它（旧口径会永久留在账上）。
+  detectCustomPricing()
 
   // ---------- 历史回填 ----------
   //
@@ -1236,6 +1276,25 @@ export function apply(ctx) {
     backfillRunning = false
     schedulePersist()
     return { state, days: filled, sessions: scanned, scanned, skipped, total }
+  }
+
+  /**
+   * 给没有「自定义计费」开关的老条目补上判定：与内置默认价不同 → 用户自定义。
+   * 放在 loadState() 之后、任何迁移之前，避免把用户手填的价当成"停在旧默认价"覆盖掉。
+   */
+  function detectCustomPricing() {
+    for (const [model, price] of prices) {
+      if (price.customPricing !== undefined) continue
+      const preset = PRESET_PRICES[normalizeModelId(model)]
+      if (preset === undefined) {
+        // 内置价目里没有的模型（用户自己加的）当然算自定义。
+        price.customPricing = true
+        continue
+      }
+      // 与当前预设一致，或明显是某个历代出厂默认价 → 不是用户数据，交给迁移继续升级。
+      const shipped = sameBasePrice(price, preset) || historicalDefaultFor(model, price) || windowMatchesShippedPreset(price)
+      price.customPricing = shipped ? undefined : true
+    }
   }
 
   /**
@@ -1870,8 +1929,28 @@ export function apply(ctx) {
       case 'set-price': {
         const model = String((body && body.model) || '')
         if (!model) return { ok: false, error: 'missing model' }
-        const src = (body && body.price) || {}
         const existing = prices.get(model)
+        const flagPatch = {}
+        if (typeof body?.customPricing === 'boolean') flagPatch.customPricing = body.customPricing
+        if (typeof body?.tokenPlan === 'boolean') flagPatch.tokenPlan = body.tokenPlan
+
+        // 只翻开关时**绝不重写数值**：这是"勾选/取消勾选不丢用户自定义计费"的落点。
+        // 客户端在开关切换时只发 `{model, customPricing|tokenPlan}`，不带上表单里那些
+        // （关掉自定义计时显示的是内置默认价）数字，否则会把用户填过的价覆盖成默认价。
+        if (body?.price === undefined && Object.keys(flagPatch).length > 0) {
+          const preset = presetFor(model)
+          const base = existing ?? (preset ? copyPreset(preset) : undefined)
+          if (base === undefined) return { ok: false, error: 'no price to attach the flag to' }
+          const next = { ...base }
+          if (flagPatch.customPricing !== undefined) next.customPricing = flagPatch.customPricing ? true : undefined
+          if (flagPatch.tokenPlan !== undefined) next.tokenPlan = flagPatch.tokenPlan ? true : undefined
+          prices.set(model, next)
+          removed.delete(model)
+          schedulePersist()
+          return { ok: true }
+        }
+
+        const src = (body && body.price) || {}
         const peakSrc = (src.peak && typeof src.peak === 'object') ? src.peak : {}
         const peak2Src = (src.peak2 && typeof src.peak2 === 'object') ? src.peak2 : {}
         const hasValues = Number(src.input) > 0 || Number(src.output) > 0 || Number(src.cacheRead) > 0 || Number(src.cacheWrite) > 0
@@ -1893,6 +1972,9 @@ export function apply(ctx) {
           if (!existing) return { ok: true, skipped: 'no price configured' }
         }
         prices.set(model, {
+          // 开关跟随请求，缺省沿用已有值（旧 Client 不带这两个字段时不丢状态）。
+          customPricing: flagPatch.customPricing !== undefined ? (flagPatch.customPricing ? true : undefined) : existing?.customPricing,
+          tokenPlan: flagPatch.tokenPlan !== undefined ? (flagPatch.tokenPlan ? true : undefined) : existing?.tokenPlan,
           currency: normalizeCurrency(src.currency) || (existing && existing.currency) || 'USD',
           input: normalizePrice(src.input),
           output: normalizePrice(src.output),
@@ -2017,7 +2099,9 @@ export function apply(ctx) {
           sendJson(res, { ok: false, error: 'method not allowed' }, 405)
           return
         }
-        parseJsonRequest(req).then((body) => {
+        // 必须 return 这个 promise：否则 handler 立刻返回、响应在被测代码之外才写出，
+        // 错误也传不到服务器（真实 HTTP 下看不出差别，但测试无法确定性地等待结果）。
+        return parseJsonRequest(req).then((body) => {
           return handleAction(body).then((result) => sendJson(res, result))
         }).catch(() => {
           sendJson(res, { ok: false, error: 'bad request' }, 400)

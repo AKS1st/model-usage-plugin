@@ -117,9 +117,10 @@ test('startup migration upgrades stale defaults to the current official prices',
   // V4-Pro 在官方公布的改路由时点之前仍是 V4-Pro-0813，价格是它自己的那一列。
   assertOfficialShape(after.prices['deepseek-v4-pro'], 'deepseek-v4-pro',
     { input: 4.5, output: 13.5, cacheRead: 0.15 })
-  // 改路由用**时点规则**表达，而不是把价格改成 Flash 价。
-  assert.equal(after.prices['deepseek-v4-pro'].rerouteFrom, '2026-09-14T04:00:00Z')
-  assert.equal(after.prices['deepseek-v4-pro'].rerouteTo, 'deepseek-flash')
+  // 官方 2026-09-14 的定价页脚注 (2) 已推翻"9/14 之后改按 Flash 价计费"：
+  // V4-Pro 继续提供且计费不变，因此迁移后不应再出现改道字段。
+  assert.equal(after.prices['deepseek-v4-pro'].rerouteFrom, undefined, '不应再有改道时点')
+  assert.equal(after.prices['deepseek-v4-pro'].rerouteTo, undefined, '不应再有改道目标')
 })
 
 test('startup backfills a price for a model that has usage but no entry', { concurrency: 1 }, async () => {

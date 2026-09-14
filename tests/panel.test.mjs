@@ -157,9 +157,15 @@ async function mountPanel(snapshot, options = {}) {
   })
 
   const originalFetch = globalThis.fetch
-  globalThis.fetch = (_url, options) => (options && options.method === 'POST'
-    ? Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) })
-    : Promise.resolve({ ok: true, json: () => Promise.resolve(snapshot) }))
+  // 记录 POST 请求体：计费开关必须"只发开关、不发数值"，这是靠请求体本身验证的。
+  const calls = []
+  globalThis.fetch = (_url, options) => {
+    if (options && options.method === 'POST') {
+      try { calls.push(JSON.parse(options.body)) } catch { calls.push(options.body) }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) })
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(snapshot) })
+  }
 
   const container = dom.window.document.getElementById('root')
   const root = createRoot(container)
@@ -183,7 +189,7 @@ async function mountPanel(snapshot, options = {}) {
     dom.window.close()
   }
   // 面板只在总览页依赖快照；这里把 React 的 act 一并交出去，供点击后等待重渲染。
-  return { container, window: dom.window, React, unmount }
+  return { container, window: dom.window, React, unmount, calls }
 }
 
 /**
@@ -563,6 +569,106 @@ test('the heatmap label falls back to the per-run count on an older snapshot', {
   try {
     const text = handle.container.querySelector('.mu-heat-card').textContent
     assert.ok(/heatBackfilled\(days=4\)/.test(text), '应回退到 days：' + text)
+  } finally {
+    handle.unmount()
+  }
+})
+
+/** 打开明细页并展开某张卡片，返回卡片元素。 */
+async function openCard(handle, model) {
+  await clickTab(handle, 'tabModels')
+  const card = [...handle.container.querySelectorAll('.mu-card')]
+    .find((node) => node.querySelector('.mu-model')?.textContent === model)
+  assert.ok(card, '找不到模型卡片：' + model)
+  await handle.React.act(async () => {
+    card.querySelector('.mu-card-head').dispatchEvent(new handle.window.MouseEvent('click', { bubbles: true }))
+  })
+  const expanded = [...handle.container.querySelectorAll('.mu-card')]
+    .find((node) => node.querySelector('.mu-model')?.textContent === model)
+  return expanded
+}
+
+test('the pricing switches render per model, and token plan only where supported', { concurrency: 1 }, async () => {
+  const snapshot = makeSnapshot(3)
+  // 一个支持套餐、一个不支持：只有前者该出现 token plan 勾选框。
+  snapshot.presets['m-01'] = { ...snapshot.presets['m-01'], tokenPlanSupported: true }
+  const handle = await mountPanel(snapshot)
+  try {
+    const supported = await openCard(handle, 'm-01')
+    const supportedLabels = [...supported.querySelectorAll('.mu-flag')].map((n) => n.textContent)
+    assert.ok(supportedLabels.includes('customPricing'), '应有自定义计费开关：' + supportedLabels.join('/'))
+    assert.ok(supportedLabels.includes('tokenPlan'), '支持套餐的模型应有 token plan 开关：' + supportedLabels.join('/'))
+    assert.ok(/customPricingOff/.test(supported.querySelector('.mu-flags').textContent), '默认应是内置默认计费')
+
+    const unsupported = await openCard(handle, 'm-02')
+    const labels = [...unsupported.querySelectorAll('.mu-flag')].map((n) => n.textContent)
+    assert.ok(labels.includes('customPricing'), '每个模型都有自定义计费开关')
+    assert.ok(!labels.includes('tokenPlan'), '不支持套餐的模型不该出现 token plan 开关')
+  } finally {
+    handle.unmount()
+  }
+})
+
+test('the built-in defaults are shown read-only while custom pricing is off', { concurrency: 1 }, async () => {
+  const snapshot = makeSnapshot(2)
+  // 用户存了一份自定义价，但开关是关的：界面应展示**内置默认价**且不可编辑。
+  snapshot.prices['m-01'] = { ...snapshot.prices['m-01'], input: 999, output: 999, customPricing: false }
+  snapshot.presets['m-01'] = { currency: 'CNY', input: 10, output: 30, cacheRead: 0.5, cacheWrite: 0 }
+  const handle = await mountPanel(snapshot)
+  try {
+    const card = await openCard(handle, 'm-01')
+    const inputs = [...card.querySelectorAll('.mu-price-grid .mu-input')]
+    assert.equal(inputs.length, 4, '应有四个单价输入框')
+    assert.ok(inputs.every((input) => input.disabled), '关闭自定义计费时单价框应只读')
+    assert.equal(inputs[0].value, '10', '展示的应是内置默认价而不是用户存的 999')
+    // 保存/重置按钮同样禁用：此时改价不会参与计费。
+    const buttons = [...card.querySelectorAll('.mu-price-actions .mu-btn')]
+    assert.ok(buttons.length > 0 && buttons.every((button) => button.disabled), '此时价格按钮应禁用')
+  } finally {
+    handle.unmount()
+  }
+})
+
+test('toggling custom pricing sends the switch alone and never the numbers', { concurrency: 1 }, async () => {
+  // 这是"切换不丢用户自定义计费"的客户端半边：关掉自定义计费时表单里显示的是内置默认价，
+  // 如果连数值一起发过去，Host 就会用它覆盖掉用户填过的价。只发开关才是安全的。
+  const snapshot = makeSnapshot(2)
+  snapshot.prices['m-01'] = { ...snapshot.prices['m-01'], input: 999, customPricing: false }
+  const handle = await mountPanel(snapshot)
+  try {
+    const card = await openCard(handle, 'm-01')
+    const toggle = [...card.querySelectorAll('.mu-flag')].find((node) => node.textContent === 'customPricing')
+    const checkbox = toggle.querySelector('input[type=checkbox]')
+    assert.equal(checkbox.checked, false, '初始应为关闭')
+    await handle.React.act(async () => {
+      checkbox.dispatchEvent(new handle.window.MouseEvent('click', { bubbles: true }))
+    })
+    await handle.React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    const posts = handle.calls.filter((call) => call && call.action === 'set-price')
+    assert.equal(posts.length, 1, '应恰好发出一次 set-price：' + JSON.stringify(handle.calls))
+    assert.equal(posts[0].model, 'm-01')
+    assert.equal(posts[0].customPricing, true, '应带上开关')
+    assert.equal('price' in posts[0], false, '不得带上表单里的数值（否则会覆盖用户的价）')
+  } finally {
+    handle.unmount()
+  }
+})
+
+test('a token plan model is labelled as tokens-only instead of a price', { concurrency: 1 }, async () => {
+  const snapshot = makeSnapshot(2)
+  snapshot.prices['m-01'] = { ...snapshot.prices['m-01'], tokenPlan: true }
+  snapshot.presets['m-01'] = { ...snapshot.presets['m-01'], tokenPlanSupported: true }
+  const handle = await mountPanel(snapshot)
+  try {
+    const card = await openCard(handle, 'm-01')
+    // 收起态的费用位显示"套餐 · 仅记录 token"，而不是金额或"未配置价格"。
+    const head = card.querySelector('.mu-card-figure').textContent
+    assert.ok(/tokenPlanPricing/.test(head), '应显示 token plan 标签：' + head)
+    const flags = card.querySelector('.mu-flags').textContent
+    assert.ok(/tokenPlanHint/.test(flags), '应说明只记 token 不计费：' + flags)
+    const checkbox = [...card.querySelectorAll('.mu-flag')]
+      .find((node) => node.textContent === 'tokenPlan').querySelector('input[type=checkbox]')
+    assert.equal(checkbox.checked, true, '勾选状态应反映快照')
   } finally {
     handle.unmount()
   }
