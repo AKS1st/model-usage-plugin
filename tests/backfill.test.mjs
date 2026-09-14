@@ -77,7 +77,7 @@ test('aggregateSessionEvents ignores events without usage', () => {
  *   `immediate`：apply 时已可用；`late`：apply 后才可用（**线上就是这个情况**）；
  *   `absent`：始终没有该服务。
  */
-async function startWithHistory(initial, sessions, injectMode = 'immediate') {
+async function startWithHistory(initial, sessions, injectMode = 'immediate', listSessionsHook = null) {
   mkdirSync(TEMP_ROOT, { recursive: true })
   const home = mkdtempSync(join(TEMP_ROOT, 'backfill-'))
   if (initial !== undefined) writeFileSync(join(home, 'musage-stats.json'), JSON.stringify(initial))
@@ -88,6 +88,8 @@ async function startWithHistory(initial, sessions, injectMode = 'immediate') {
   const state = { route: null, intervals: [], intervalFns: [], dispose: [], readCalls: [], handlers: {} }
   const query = {
     async listSessions() {
+      // 默认正常返回；测试可注入"挂住/抛错"的行为来复现线上故障。
+      if (listSessionsHook !== null) return await listSessionsHook(sessions)
       return sessions.map((s) => ({ header: { id: s.id, createdAt: s.createdAt }, live: false, persisted: true }))
     },
     async readSession(id) {
@@ -104,6 +106,12 @@ async function startWithHistory(initial, sessions, injectMode = 'immediate') {
       if (event === 'dispose') state.dispose.push(handler)
       ;(state.handlers[event] = state.handlers[event] || []).push(handler)
       return () => {}
+    },
+    timeout: (fn, delay) => {
+      // 与 interval 同为 disposer 语义；测试里也真实挂上定时器。
+      const id = setTimeout(fn, delay)
+      state.intervals.push(id)
+      return () => clearTimeout(id)
     },
     interval: (fn, delay) => {
       state.intervalFns.push(fn)
@@ -367,4 +375,129 @@ test('the wake-up scans at most once', { concurrency: 1 }, async () => {
   await new Promise((resolve) => setTimeout(resolve, 300))
   assert.equal(plugin.readCalls.length, afterFirst, '唤醒只允许发生一次')
   await plugin.stop()
+})
+
+// ---------- 自锁（线上实际故障） ----------
+
+test('a hanging listSessions does not lock the backfill forever', { concurrency: 1 }, async () => {
+  // 线上故障：注入得到的服务实例的 listSessions() 一直没有结果。
+  // 旧实现里这次运行永远不返回，`backfillRunning` 就此为真，
+  // 之后所有重试、唤醒、手动触发都直接返回旧结果——功能永久失效，重启才恢复。
+  const previousTimeout = process.env.DSH_MODEL_USAGE_BACKFILL_TIMEOUT_MS
+  process.env.DSH_MODEL_USAGE_BACKFILL_TIMEOUT_MS = '120'
+  let calls = 0
+  const history = [{
+    id: 's1',
+    createdAt: noonOf(6),
+    events: [
+      { type: 'request/context', time: noonOf(6), data: { model: 'm' } },
+      { type: 'assistant/message', time: noonOf(6), data: { usage: { inputTokens: 40, outputTokens: 2 } } },
+    ],
+  }]
+  const plugin = await startWithHistory(undefined, history, 'immediate', () => {
+    calls += 1
+    // 第一次挂住；之后恢复正常（模拟服务稍后就绪）。
+    return calls === 1 ? new Promise(() => {}) : Promise.resolve(
+      history.map((s) => ({ header: { id: s.id, createdAt: s.createdAt }, live: false, persisted: true })),
+    )
+  })
+  try {
+    const first = plugin.snapshot()
+    assert.equal(first.backfillDebug.running, false, '超时后必须复位运行标志（不能自锁）')
+    assert.equal(first.backfill.state, 'error', '第一次超时应记为 error 而不是停在 empty')
+    assert.match(String(first.backfill.message || ''), /超时/, '错误信息要指明是超时')
+    // 失败也要留在重试链里：驱动重试定时器，应该能补上历史。
+    for (const fn of plugin.state.intervalFns.splice(0)) fn()
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    const after = plugin.snapshot()
+    assert.equal(after.backfill.state, 'done', '重试后应完成（实际 ' + after.backfill.state + '）')
+    assert.ok(after.heatSeries.some((entry) => entry.d === dayKey(noonOf(6))), '历史那天应被补上')
+    assert.equal(after.backfillDebug.running, false, '结束后不得残留运行标志')
+  } finally {
+    if (previousTimeout === undefined) delete process.env.DSH_MODEL_USAGE_BACKFILL_TIMEOUT_MS
+    else process.env.DSH_MODEL_USAGE_BACKFILL_TIMEOUT_MS = previousTimeout
+    await plugin.stop()
+  }
+})
+
+test('a rejecting listSessions releases the running guard', { concurrency: 1 }, async () => {
+  // 抛错路径同样要复位：旧实现在抛错时不会执行复位那一行，
+  // 于是标志永久为真，后续尝试全部空转。
+  let calls = 0
+  const history = [{
+    id: 's2',
+    createdAt: noonOf(5),
+    events: [
+      { type: 'request/context', time: noonOf(5), data: { model: 'm' } },
+      { type: 'assistant/message', time: noonOf(5), data: { usage: { inputTokens: 10, outputTokens: 1 } } },
+    ],
+  }]
+  const plugin = await startWithHistory(undefined, history, 'immediate', () => {
+    calls += 1
+    if (calls === 1) throw new Error('transient failure')
+    return Promise.resolve(history.map((s) => ({ header: { id: s.id, createdAt: s.createdAt }, live: false, persisted: true })))
+  })
+  try {
+    assert.equal(plugin.snapshot().backfillDebug.running, false, '抛错后必须复位')
+    for (const fn of plugin.state.intervalFns.splice(0)) fn()
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    assert.equal(plugin.snapshot().backfill.state, 'done', '重试后应完成')
+  } finally {
+    await plugin.stop()
+  }
+})
+
+test('the backfill resolves sessionQuery at call time instead of trusting the injected instance', { concurrency: 1 }, async () => {
+  // 注入实例可能不工作而现场解析的实例正常。这里让 apply 时注入的实例恒为空，
+  // 而 ctx.get 返回正常实例：回填必须用后者（否则永远补不上）。
+  const history = [{
+    id: 's3',
+    createdAt: noonOf(4),
+    events: [
+      { type: 'request/context', time: noonOf(4), data: { model: 'm' } },
+      { type: 'assistant/message', time: noonOf(4), data: { usage: { inputTokens: 5, outputTokens: 1 } } },
+    ],
+  }]
+  const dead = {
+    async listSessions() { return [] },
+    async readSession() { throw new Error('dead instance') },
+  }
+  const live = {
+    async listSessions() {
+      return history.map((s) => ({ header: { id: s.id, createdAt: s.createdAt }, live: false, persisted: true }))
+    },
+    async readSession(id) {
+      const found = history.find((s) => s.id === id)
+      return { session: { id }, inheritedEventCount: 0, events: found.events }
+    },
+  }
+  mkdirSync(TEMP_ROOT, { recursive: true })
+  const home = mkdtempSync(join(TEMP_ROOT, 'backfill-'))
+  const previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  const mod = await import(pathToFileURL(join(PLUGIN_ROOT, 'src/index.js')).href + '?resolve-at-call=1')
+  const state = { route: null }
+  mod.apply({
+    webServer: { register(options) { state.route = options; return () => {} } },
+    on: () => () => {},
+    timeout: () => () => {},
+    interval: () => () => {},
+    effect: (fn) => { fn(); return () => {} },
+    // apply 阶段的注入拿到"死的"实例；ctx.get 拿到"活的"实例。
+    inject: (_deps, callback) => callback({ sessionQuery: dead }),
+    get: (name) => (name === 'sessionQuery' ? live : undefined),
+  })
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const res = { setHeader() {}, end(text) { this.body = text } }
+    state.route.handler({ method: 'GET', headers: { host: '127.0.0.1:3080' } }, res)
+    const snap = JSON.parse(res.body)
+    assert.equal(snap.backfillDebug.source, 'ctx.get', '应记录为按调用时解析')
+    assert.equal(snap.backfill.state, 'done', '必须用 ctx.get 的实例完成回填（实际 ' + snap.backfill.state + '）')
+    assert.ok(snap.heatSeries.some((entry) => entry.d === dayKey(noonOf(4))), '历史那天应被补上')
+  } finally {
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
 })

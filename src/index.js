@@ -1083,19 +1083,76 @@ export function apply(ctx) {
 
   let backfill = { state: 'pending', days: 0, sessions: 0, scanned: 0, total: 0 }
   let backfillRunning = false
+  let backfillStartedAt = 0
+  let backfillAttempts = 0
+  let backfillSource = 'none'
   // 说明：'pending' = 等待服务就绪；'unavailable' = 该部署没有该服务；
   // 'done' / 'partial' = 回填完成 / 受时间预算截断（下次启动续跑）；'error' = 异常。
+
+  /**
+   * 给一次可能永不落定的调用加上限。
+   *
+   * 注入得到的服务实例可能挂在内部依赖上永不 settle（线上实测：同一个进程里，
+   * 注入实例的 `listSessions()` 一直没有结果，而调用时 `ctx.get('sessionQuery')`
+   * 当场返回 589 条）。没有超时的话这次调用会永远挂着，把整个回填功能锁死。
+   * @param {Promise<unknown>} promise - 待限时的调用。
+   * @param {number} ms - 上限毫秒数。
+   * @param {string} label - 超时信息里的调用名。
+   * @returns {Promise<unknown>} 原结果，或超时错误。
+   */
+  const withTimeout = (promise, ms, label) => new Promise((resolve, reject) => {
+    let settled = false
+    // `ctx.timeout` 与 `ctx.interval` 一样返回 **disposer**，不是 timer id。
+    const disposeTimer = ctx.timeout(() => {
+      if (settled) return
+      settled = true
+      reject(new Error(label + ' 超时（' + ms + 'ms）'))
+    }, ms)
+    promise.then((value) => {
+      if (settled) return
+      settled = true
+      disposeTimer()
+      resolve(value)
+    }, (error) => {
+      if (settled) return
+      settled = true
+      disposeTimer()
+      reject(error)
+    })
+  })
+  // 测试用 `DSH_MODEL_USAGE_BACKFILL_TIMEOUT_MS` 把等待压到毫秒级（同写盘防抖的做法）。
+  const parsedTimeout = Number(process.env.DSH_MODEL_USAGE_BACKFILL_TIMEOUT_MS)
+  const LIST_TIMEOUT_MS = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : 15_000
+  // 一次运行可以被视为"卡住"的时长：超过它，新的尝试允许插进来（防自锁的第二道保险）。
+  const STALE_RUN_MS = LIST_TIMEOUT_MS * 6
 
   /**
    * 回填历史日账；只填台账里缺失的日子。
    * @returns {Promise<{state: string, days: number, sessions: number, scanned: number}>} 结果。
    */
   async function runBackfill(query) {
-    if (backfillRunning) return backfill
+    // `backfillRunning` 是去抖，不是锁：卡住的运行必须能被后来的尝试顶掉，
+    // 否则一次挂死就等于这个功能永久失效（重启才恢复，而且每次启动都会重演）。
+    if (backfillRunning && Date.now() - backfillStartedAt < STALE_RUN_MS) return backfill
     backfillRunning = true
+    backfillStartedAt = Date.now()
+    backfillAttempts += 1
+    try {
+      return await scanBackfill(query)
+    } finally {
+      // 无论正常返回、抛错还是超时，都必须复位。
+      backfillRunning = false
+    }
+  }
+
+  /**
+   * 回填的实际扫描（由 {@link runBackfill} 负责加锁与复位）。
+   * @returns {Promise<{state: string, days: number, sessions: number, scanned: number}>} 结果。
+   */
+  async function scanBackfill(query) {
     const budgetMs = 30_000
     const startedAt = Date.now()
-    const sessions = await query.listSessions()
+    const sessions = await withTimeout(query.listSessions(), LIST_TIMEOUT_MS, 'listSessions')
     // 新的在前：先补最近的日子，用户最容易先看到。
     sessions.sort((a, b) => (b.header.createdAt || 0) - (a.header.createdAt || 0))
     const todayKey = dayKeyOf(new Date())
@@ -1141,6 +1198,21 @@ export function apply(ctx) {
     return { state, days: filled, sessions: scanned, scanned, total }
   }
 
+  /**
+   * 解析当前可用的 `sessionQuery`。
+   *
+   * 注入时捕获的实例可能已经不工作（线上实测同一进程里它一直没有结果，
+   * 而调用时 `ctx.get('sessionQuery')` 当场返回 589 条），所以每个调用点都重新解析，
+   * 只把注入实例当作兜底。
+   * @param {object} fallback - 注入回调里拿到的实例。
+   * @returns {object} 本次调用要用的实例。
+   */
+  function resolveSessionQuery(fallback) {
+    const current = typeof ctx.get === 'function' ? ctx.get('sessionQuery') : undefined
+    backfillSource = current === undefined ? 'injected' : 'ctx.get'
+    return current === undefined ? fallback : current
+  }
+
   // 用**延迟注入**等服务就绪，而不是在 apply 里直接 ctx.get：
   // apply 执行时该插件可能还没注册（组合里有这一行 ≠ 此刻已可读），
   // 直接查会拿到 undefined —— 这正是线上"回填没跑"的原因。
@@ -1160,7 +1232,8 @@ export function apply(ctx) {
       // 插件生命周期结束后不再安排重试。
       if (disposed) return
       backfillQuery = query
-      runBackfill(query).then((result) => {
+      // 注入回调只用来判断"服务何时可用"；真正调用时重新解析（见 resolveSessionQuery）。
+      runBackfill(resolveSessionQuery(query)).then((result) => {
         backfill = result
         attempts += 1
         if (result.state === 'done' || attempts >= MAX_ATTEMPTS || disposed) return
@@ -1171,7 +1244,12 @@ export function apply(ctx) {
           attempt(query)
         }, RETRY_DELAY_MS)
       }).catch((error) => {
+        // 瞬时失败（超时 / 服务刚就绪）同样要留在重试链里：
+        // 之前这里只记状态、不排下一次，等于一次抖动就永久放弃。
         backfill = { state: 'error', days: 0, sessions: 0, scanned: 0, total: 0, message: (error && error.message) || String(error) }
+        attempts += 1
+        if (attempts >= MAX_ATTEMPTS || disposed) return
+        const retryAfterError = ctx.interval(() => { retryAfterError(); attempt(backfillQuery) }, RETRY_DELAY_MS)
       })
     }
     ctx.inject(['sessionQuery'], (scoped) => { attempt(scoped.sessionQuery) })
@@ -1189,7 +1267,7 @@ export function apply(ctx) {
     if (backfillKicked || disposed || heatBackfilled || backfillQuery === null) return
     if (backfill.state !== 'empty' && backfill.state !== 'pending') return
     backfillKicked = true
-    runBackfill(backfillQuery).then((result) => { backfill = result }).catch(() => {})
+    runBackfill(resolveSessionQuery(backfillQuery)).then((result) => { backfill = result }).catch(() => {})
   }
 
   // 启动时若没有任何缓存汇率，自动刷新一次并写盘（失败静默，等待客户端按需重试）。
@@ -1732,6 +1810,13 @@ export function apply(ctx) {
       targetCurrency,
       pluginVersion: PLUGIN_VERSION,
       backfill,
+      // 诊断用：卡住的运行会让 state 停在旧值，光看 state 分不清"没数据"和"被锁死"。
+      backfillDebug: {
+        running: backfillRunning,
+        attempts: backfillAttempts,
+        startedAt: backfillStartedAt || null,
+        source: backfillSource,
+      },
       heatBackfilled,
       balance: { ...balance, infos: balance.infos.slice() },
     }
@@ -1842,7 +1927,7 @@ export function apply(ctx) {
         if (query === undefined) {
           return { ok: false, error: 'sessionQuery 服务不可用（该部署未挂载）', state: backfill.state }
         }
-        backfill = await runBackfill(query)
+        backfill = await runBackfill(resolveSessionQuery(query))
         return { ok: true, ...backfill }
       }
       case 'diag': {
